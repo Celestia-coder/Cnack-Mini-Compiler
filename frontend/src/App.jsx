@@ -106,7 +106,7 @@ const CodeEditor = ({ value, onChange, disabled }) => {
 
 // -------------------- Parsing Output --------------------
 const parseTokenOutput = (output) => {
-  const lines = output.split("\n")
+  const lines = output.split("\n");
   const tokens = []
   let startParsing = false
 
@@ -117,13 +117,15 @@ const parseTokenOutput = (output) => {
     }
 
     if (startParsing && line.trim()) {
-      const parts = line.split("|").map((p) => p.trim())
-      if (parts.length === 3) {
-        tokens.push({
-          line: parts[0],
-          type: parts[1],
-          lexeme: parts[2],
-        })
+      const first = line.indexOf("|")
+      const second = line.indexOf("|", first + 1)
+
+      if (first !== -1 && second !== -1) {
+        const lineNum = line.slice(0, first).trim()
+        const type = line.slice(first + 1, second).trim()
+        const lexeme = line.slice(second + 1).trim()
+
+        tokens.push({ line: lineNum, type, lexeme })
       }
     }
   }
