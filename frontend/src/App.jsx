@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react" // 1. Added useRef and useCallback
+import { useState, useRef, useCallback } from "react" 
 
-// API Helper
 const API_URL = "http://localhost:3001"
 
 const runLexicalAnalysis = async (code) => {
@@ -26,26 +25,51 @@ const CodeEditor = ({ value, onChange, disabled }) => {
   const editorRef = useRef(null)
   const lineNumbersRef = useRef(null)
 
-  // 3. Handler to synchronize the scroll
   const handleScroll = useCallback(() => {
     if (editorRef.current && lineNumbersRef.current) {
-      // Set the line number container's scroll position to match the textarea's scroll position
       lineNumbersRef.current.scrollTop = editorRef.current.scrollTop
     }
   }, [])
 
   const handleKeyDown = (e) => {
+    const start = e.target.selectionStart
+    const end = e.target.selectionEnd
+
     if (e.key === "Tab") {
       e.preventDefault()
-      const start = e.target.selectionStart
-      const end = e.target.selectionEnd
-
+      
       const newValue = value.substring(0, start) + "    " + value.substring(end)
       onChange(newValue)
 
       setTimeout(() => {
         e.target.selectionStart = e.target.selectionEnd = start + 4
       }, 0)
+      return
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault()
+
+      const lines = value.substring(0, start).split('\n');
+      const currentLine = lines[lines.length - 1];
+      
+      const match = currentLine.match(/^(\s*)/);
+      let indent = match ? match[0] : ''; 
+
+      const trimmedLine = currentLine.trim();
+    
+      if (trimmedLine.endsWith('{') || trimmedLine.endsWith('(') || trimmedLine.endsWith('[')) {
+        indent += '    ';
+      }
+
+      const newValue = value.substring(0, start) + "\n" + indent + value.substring(end)
+      
+      onChange(newValue)
+
+      setTimeout(() => {
+        e.target.selectionStart = e.target.selectionEnd = start + 1 + indent.length
+      }, 0)
+      return
     }
   }
 
