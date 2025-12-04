@@ -1,5 +1,3 @@
-/* CNACK LEXICAL ANALYZER - Web Version with Specific Token Types */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -172,15 +170,6 @@ KeywordMapping keywords[] = {
     {"otherwise", TOKEN_RW_OTHERWISE},
     {"auto_ref", TOKEN_RW_AUTO_REF}};
 int keywordCount = 30;
-
-/* Original keyword list (kept for compatibility) */
-// char *keywordList[] = {
-//     "int", "float", "char", "bool", "string",
-//     "const", "if", "else", "elif", "switch",
-//     "case", "default", "assign", "struct", "for", "while",
-//     "do", "break", "continue", "ask", "display",
-//     "execute", "exit", "true", "false", "fetch",
-//     "fn", "when", "otherwise", "auto_ref"};
 
 /* ========== CHARACTER UTILITY FUNCTIONS ========== */
 
@@ -711,7 +700,7 @@ Token getNextToken()
             return createToken(TOKEN_MULT_ASSIGN_OP);
         }
         /* Check if it's likely a pointer: * NOT followed by whitespace and followed by identifier
-         * This catches cases like: int *ptr, int*ptr
+         * This catches a case like: int *ptr
          * But allows: a * b (with spaces) to be multiplication */
         if (!isWhitespace(currentChar()) && (isLetter(currentChar()) || currentChar() == '_' || currentChar() == '*'))
         {
@@ -838,7 +827,7 @@ int main()
     char *input = NULL;
     size_t buffer_size = 0;
     size_t total_size = 0;
-    size_t chunk_size = 1024;
+    size_t chunk_size = 100000;
 
     /* Allocate initial buffer */
     input = (char *)malloc(chunk_size);
