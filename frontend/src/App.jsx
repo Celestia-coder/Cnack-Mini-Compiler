@@ -358,7 +358,7 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
 
 // -------------------- Main App --------------------
 const App = () => {
-  const [code, setCode] = useState("// Cnack Mini Compiler\nexecute() {\n    int x = 10;\n    exit();\n}")
+  const [code, setCode] = useState("// Cnack Mini Compiler\n execute() {\n    int x = 10;\n    exit();\n}")
   const [output, setOutput] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
