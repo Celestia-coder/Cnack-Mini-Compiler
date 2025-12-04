@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react" // 1. Added useRef and useCallback
 
 // API Helper
 const API_URL = "http://localhost:3001"
@@ -22,6 +22,18 @@ const runLexicalAnalysis = async (code) => {
 
 // -------------------- Code Editor with Line Numbers --------------------
 const CodeEditor = ({ value, onChange, disabled }) => {
+  // 2. Create refs for the line numbers and the textarea
+  const editorRef = useRef(null)
+  const lineNumbersRef = useRef(null)
+
+  // 3. Handler to synchronize the scroll
+  const handleScroll = useCallback(() => {
+    if (editorRef.current && lineNumbersRef.current) {
+      // Set the line number container's scroll position to match the textarea's scroll position
+      lineNumbersRef.current.scrollTop = editorRef.current.scrollTop
+    }
+  }, [])
+
   const handleKeyDown = (e) => {
     if (e.key === "Tab") {
       e.preventDefault()
@@ -41,18 +53,19 @@ const CodeEditor = ({ value, onChange, disabled }) => {
   const lineNumbers = Array.from({ length: lines }, (_, i) => i + 1).join("\n")
 
   return (
-    <div style={{ display: "flex", height: "100%", background: "#f5f1ed" }}>
-      {/* Line Numbers */}
+    <div style={{ display: "flex", height: "100%", background: "#ffffff" }}>
+      {/* Line Numbers - Ref attached. overflowY: "hidden" prevents a second scrollbar. */}
       <div
+        ref={lineNumbersRef} // <-- Ref attached
         style={{
           width: "50px",
           padding: "20px 0",
-          background: "#ede8e3",
-          borderRight: "1px solid #d4c4b0",
+          background: "#f8fafc",
+          borderRight: "1px solid #e0e7ff",
           fontFamily: '"Fira Code", "Consolas", monospace',
           fontSize: "13px",
           lineHeight: "1.6",
-          color: "#a89884",
+          color: "#4a89c6",
           textAlign: "right",
           paddingRight: "12px",
           overflowY: "hidden",
@@ -62,11 +75,13 @@ const CodeEditor = ({ value, onChange, disabled }) => {
         <pre style={{ margin: 0, fontSize: "13px", lineHeight: "1.6" }}>{lineNumbers}</pre>
       </div>
 
-      {/* Editor */}
+      {/* Editor - Ref attached and onScroll handler added. */}
       <textarea
+        ref={editorRef} // <-- Ref attached
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
+        onScroll={handleScroll} // <-- Scroll synchronization handler added
         disabled={disabled}
         placeholder="// write code here"
         spellCheck={false}
@@ -79,8 +94,8 @@ const CodeEditor = ({ value, onChange, disabled }) => {
           resize: "none",
           border: "none",
           outline: "none",
-          background: "#f5f1ed",
-          color: "#3d2817",
+          background: "#ffffff",
+          color: "#0f4687",
           overflowY: "auto",
           transition: "background 0.2s",
         }}
@@ -126,16 +141,16 @@ const Output = ({ output, error, loading }) => {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "#f5f1ed",
+        background: "#ffffff",
       }}
     >
       {/* Header */}
       <div
         style={{
           padding: "16px 24px",
-          background: "#d4c4b0",
-          borderBottom: "1px solid #c4b09c",
-          color: "#5c4a38",
+          background: "rgba(15, 69, 135, 1)",
+          borderBottom: "1px solid #c7d2fe",
+          color: "#ffffffff",
           fontWeight: "600",
           fontSize: "13px",
           textTransform: "uppercase",
@@ -169,16 +184,16 @@ const Output = ({ output, error, loading }) => {
             <div>{error}</div>
           </div>
         ) : loading ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#a89884" }}>
+          <div style={{ textAlign: "center", padding: "40px", color: "#4a89c6" }}>
             <div style={{ fontSize: "13px", fontWeight: "500" }}>Analyzing...</div>
           </div>
         ) : tokens.length > 0 ? (
           <div
             style={{
-              background: "#fff9f3",
+              background: "#f8fafc",
               borderRadius: "8px",
               overflow: "hidden",
-              border: "1px solid #d4c4b0",
+              border: "1px solid #e0e7ff",
             }}
           >
             {/* Table Header */}
@@ -187,12 +202,12 @@ const Output = ({ output, error, loading }) => {
                 display: "grid",
                 gridTemplateColumns: "repeat(3, 1fr)",
                 padding: "16px 20px",
-                background: "#d4c4b0",
+                background: "#4a89c6",
                 fontWeight: "600",
                 fontSize: "12px",
-                color: "#5c4a38",
+                color: "#ffffffff",
                 textTransform: "uppercase",
-                borderBottom: "1px solid #c4b09c",
+                borderBottom: "1px solid #c7d2fe",
                 letterSpacing: "0.5px",
                 textAlign: "center",
               }}
@@ -211,28 +226,29 @@ const Output = ({ output, error, loading }) => {
                     display: "grid",
                     gridTemplateColumns: "repeat(3, 1fr)",
                     padding: "12px 20px",
-                    background: i % 2 === 0 ? "#f5f1ed" : "#fff9f3",
-                    borderBottom: "1px solid #e0d4c4",
+                    background: i % 2 === 0 ? "#ffffff" : "#f8fafc",
+                    borderBottom: "1px solid #e0e7ff",
                     fontSize: "13px",
                     transition: "background 0.15s",
                     textAlign: "center",
+                    color: "#0f4687",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#e8dcc8"
+                    e.currentTarget.style.background = "#dbeafe"
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = i % 2 === 0 ? "#f5f1ed" : "#fff9f3"
+                    e.currentTarget.style.background = i % 2 === 0 ? "#ffffff" : "#f8fafc"
                   }}
                 >
-                  <div style={{ color: "#8b7355" }}>{t.line}</div>
-                  <div style={{ color: "#9d7e63" }}>{t.type}</div>
-                  <div style={{ color: "#5c4a38" }}>{t.lexeme}</div>
+                  <div style={{ color: "#0e5398" }}>{t.line}</div>
+                  <div style={{ color: "#0f4687" }}>{t.type}</div>
+                  <div style={{ color: "#0f4687" }}>{t.lexeme}</div>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: "center", padding: "40px", color: "#a89884", fontSize: "13px" }}>
+          <div style={{ textAlign: "center", padding: "40px", color: "#4a89c6", fontSize: "13px" }}>
             No analysis yet. Enter code and click "Analyze" to get started.
           </div>
         )}
@@ -249,8 +265,8 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
       <div
         style={{
           padding: "16px 24px",
-          background: "#fff9f3",
-          borderBottom: "1px solid #d4c4b0",
+          background: "rgba(15, 69, 135, 1)",
+          borderBottom: "1px solid #e0e7ff",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
@@ -258,7 +274,7 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
       >
         <div
           style={{
-            color: "#5c4a38",
+            color: "#ffffffff",
             fontWeight: "600",
             fontSize: "13px",
             textTransform: "uppercase",
@@ -273,10 +289,10 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
           disabled={loading}
           style={{
             padding: "6px 12px",
-            background: "#d4c4b0",
+            background: "#e0e7ff",
             borderRadius: "6px",
-            color: "#5c4a38",
-            border: "1px solid #c4b09c",
+            color: "#0f4687",
+            border: "1px solid #c7d2fe",
             cursor: loading ? "not-allowed" : "pointer",
             fontSize: "12px",
             fontWeight: "500",
@@ -285,14 +301,14 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
           }}
           onMouseEnter={(e) => {
             if (!loading) {
-              e.target.style.background = "#c4b09c"
-              e.target.style.color = "#3d2817"
+              e.target.style.background = "#c7d2fe"
+              e.target.style.color = "#0e5398"
             }
           }}
           onMouseLeave={(e) => {
             if (!loading) {
-              e.target.style.background = "#d4c4b0"
-              e.target.style.color = "#5c4a38"
+              e.target.style.background = "#e0e7ff"
+              e.target.style.color = "#0f4687"
             }
           }}
         >
@@ -306,15 +322,15 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
       </div>
 
       {/* Analyze Button */}
-      <div style={{ padding: "16px 24px", borderTop: "1px solid #d4c4b0" }}>
+      <div style={{ padding: "16px 24px", borderTop: "1px solid #e0e7ff" }}>
         <button
           onClick={onRun}
           disabled={loading}
           style={{
             width: "100%",
             padding: "12px",
-            background: loading ? "rgba(139, 109, 79, 0.3)" : "#8b6d4f",
-            color: "#fff9f3",
+            background: loading ? "rgba(15, 70, 135, 0.3)" : "#0f4687",
+            color: "#ffffff",
             border: "none",
             borderRadius: "6px",
             fontWeight: "600",
@@ -324,12 +340,12 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
           }}
           onMouseEnter={(e) => {
             if (!loading) {
-              e.target.style.background = "#a0835d"
+              e.target.style.background = "#0e5398"
             }
           }}
           onMouseLeave={(e) => {
             if (!loading) {
-              e.target.style.background = "#8b6d4f"
+              e.target.style.background = "#0f4687"
             }
           }}
         >
@@ -349,7 +365,7 @@ const App = () => {
 
   const handleRun = async () => {
     if (!code.trim()) {
-      setError("Please enter some code to analyze")
+      setError("Please enter code to analyze.")
       setOutput("")
       return
     }
@@ -382,7 +398,7 @@ const App = () => {
         width: "100vw",
         height: "100vh",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        background: "#fff9f3",
+        background: "#FAF9F6",
         overflow: "hidden",
       }}
     >
@@ -390,17 +406,20 @@ const App = () => {
       <div
         style={{
           padding: "16px 24px",
-          background: "#f5f1ed",
-          borderBottom: "1px solid #d4c4b0",
+          background: "#f8fafc",
+          borderBottom: "1px solid #e0e7ff",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
-        <h1 style={{ margin: "0", fontSize: "18px", fontWeight: "700", color: "#5c4a38", letterSpacing: "-0.5px" }}>
-          Cnack Mini Compiler
-        </h1>
-        <div style={{ fontSize: "12px", color: "#a89884" }}>Lexical Analysis</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <img src="Cnack_nobg.png" alt="Cnack Logo" style={{ height: "45px", width: "auto" }} />
+          <h1 style={{ margin: "0", fontSize: "18px", fontWeight: "700", color: "#0f4687", letterSpacing: "-0.5px" }}>
+            Cnack Mini Compiler
+          </h1>
+        </div>
+        <div style={{ fontSize: "12px", color: "#4a89c6" }}>Lexical Analyzer</div>
       </div>
 
       {/* Two-panel layout */}
@@ -412,17 +431,18 @@ const App = () => {
           overflow: "hidden",
           gap: "16px",
           padding: "16px",
+          background: "#d8e6f4ff",
         }}
       >
         {/* Left Panel - Editor */}
         <div
           style={{
-            background: "#fff9f3",
+            background: "#ffffff",
             borderRadius: "8px",
             display: "flex",
             flexDirection: "column",
             minWidth: "0",
-            border: "1px solid #d4c4b0",
+            border: "1px solid #e0e7ff",
             overflow: "hidden",
           }}
         >
@@ -432,12 +452,12 @@ const App = () => {
         {/* Right Panel - Output */}
         <div
           style={{
-            background: "#fff9f3",
+            background: "#ffffff",
             borderRadius: "8px",
             display: "flex",
             flexDirection: "column",
             minWidth: "0",
-            border: "1px solid #d4c4b0",
+            border: "1px solid #e0e7ff",
             overflow: "hidden",
           }}
         >
