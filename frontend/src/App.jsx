@@ -21,7 +21,6 @@ const runLexicalAnalysis = async (code) => {
 
 // -------------------- Code Editor with Line Numbers --------------------
 const CodeEditor = ({ value, onChange, disabled }) => {
-  // 2. Create refs for the line numbers and the textarea
   const editorRef = useRef(null)
   const lineNumbersRef = useRef(null)
 
@@ -37,10 +36,8 @@ const CodeEditor = ({ value, onChange, disabled }) => {
 
     if (e.key === "Tab") {
       e.preventDefault()
-      
       const newValue = value.substring(0, start) + "    " + value.substring(end)
       onChange(newValue)
-
       setTimeout(() => {
         e.target.selectionStart = e.target.selectionEnd = start + 4
       }, 0)
@@ -49,13 +46,10 @@ const CodeEditor = ({ value, onChange, disabled }) => {
 
     if (e.key === "Enter") {
       e.preventDefault()
-
       const lines = value.substring(0, start).split('\n');
       const currentLine = lines[lines.length - 1];
-      
       const match = currentLine.match(/^(\s*)/);
       let indent = match ? match[0] : ''; 
-
       const trimmedLine = currentLine.trim();
     
       if (trimmedLine.endsWith('{') || trimmedLine.endsWith('(') || trimmedLine.endsWith('[')) {
@@ -63,9 +57,7 @@ const CodeEditor = ({ value, onChange, disabled }) => {
       }
 
       const newValue = value.substring(0, start) + "\n" + indent + value.substring(end)
-      
       onChange(newValue)
-
       setTimeout(() => {
         e.target.selectionStart = e.target.selectionEnd = start + 1 + indent.length
       }, 0)
@@ -76,51 +68,61 @@ const CodeEditor = ({ value, onChange, disabled }) => {
   const lines = value.split("\n").length
   const lineNumbers = Array.from({ length: lines }, (_, i) => i + 1).join("\n")
 
+  // Shared font styles to ensure perfect alignment
+  const sharedStyles = {
+    fontFamily: '"Fira Code", "Consolas", monospace',
+    fontSize: "13px",
+    lineHeight: "21px",    
+    paddingTop: "10px",    // <--- FIX: Reduced from 20px to move content "up"
+    paddingBottom: "10px", 
+  }
+
   return (
-    <div style={{ display: "flex", height: "100%", background: "#ffffff" }}>
-      {/* Line Numbers - Ref attached. overflowY: "hidden" prevents a second scrollbar. */}
+    <div style={{ display: "flex", height: "100%", background: "#ffffff", position: "relative" }}>
+      {/* Line Numbers */}
       <div
-        ref={lineNumbersRef} // <-- Ref attached
+        ref={lineNumbersRef}
         style={{
-          width: "50px",
-          padding: "20px 0",
+          ...sharedStyles,
+          width: "60px",          // <--- FIX: Increased width (was 50px) for more space
           background: "#f8fafc",
           borderRight: "1px solid #e0e7ff",
-          fontFamily: '"Fira Code", "Consolas", monospace',
-          fontSize: "13px",
-          lineHeight: "1.6",
           color: "#4a89c6",
           textAlign: "right",
-          paddingRight: "12px",
-          overflowY: "hidden",
+          paddingRight: "16px",   // <--- FIX: More padding between number and border
+          overflow: "hidden", 
           userSelect: "none",
+          boxSizing: "border-box"
         }}
       >
-        <pre style={{ margin: 0, fontSize: "13px", lineHeight: "1.6" }}>{lineNumbers}</pre>
+        <pre style={{ margin: 0, ...sharedStyles, padding: 0 }}>{lineNumbers}</pre>
       </div>
 
-      {/* Editor - Ref attached and onScroll handler added. */}
+      {/* Editor */}
       <textarea
-        ref={editorRef} // <-- Ref attached
+        ref={editorRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        onScroll={handleScroll} // <-- Scroll synchronization handler added
+        onScroll={handleScroll}
         disabled={disabled}
         placeholder="// write code here"
         spellCheck={false}
         style={{
+          ...sharedStyles,
           flex: 1,
-          padding: "20px",
-          fontFamily: '"Fira Code", "Consolas", monospace',
-          fontSize: "13px",
-          lineHeight: "1.6",
+          paddingLeft: "24px",   // <--- FIX: Increased padding (was 20px) for separation
+          paddingRight: "20px",
+          paddingTop: "20px",
+          paddingBottom: "5px",
           resize: "none",
           border: "none",
           outline: "none",
           background: "#ffffff",
           color: "#0f4687",
           overflowY: "auto",
+          whiteSpace: "pre",
+          overflowX: "auto",
           transition: "background 0.2s",
         }}
       />
@@ -468,7 +470,7 @@ const App = () => {
             display: "flex",
             flexDirection: "column",
             minWidth: "0",
-            border: "1px solid #e0e7ff",
+            border: "1px solid #b9babdff",
             overflow: "hidden",
           }}
         >
@@ -483,7 +485,7 @@ const App = () => {
             display: "flex",
             flexDirection: "column",
             minWidth: "0",
-            border: "1px solid #e0e7ff",
+            border: "1px solid #b9babdff",
             overflow: "hidden",
           }}
         >
