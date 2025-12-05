@@ -1,0 +1,32 @@
+// This program applies the CAB Principle
+
+execute() {
+    int count = 5;
+    float grade = 98.5;
+    string name = "Triselle";
+
+    // This is a single line comment
+    /* This is a
+       multi-line comment */
+
+    if (count > 0) {
+        display("Count is positive");
+    }
+
+    // --- Multi-line Comment Example ---
+    /* This is a
+       multi-line comment */
+
+    for (int i = 0; i < count; i++) {
+        grade += 1.5;
+    }
+
+    // --- Conditional Assignment Blocks (CAB): assign values based on conditions in one clean block ---
+    assign (grade) {
+        when count >= 90: 'A';
+        when count >= 80: 'B';
+        otherwise: 'C';
+    }
+
+    exit();
+}

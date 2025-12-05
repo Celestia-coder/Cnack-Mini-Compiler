@@ -1,0 +1,38 @@
+// This program applies the Auto Reference and Quantum Pointer principles
+
+execute() {
+    // --- Auto Reference: create referenced values quickly ---
+    int *scorePtr = auto_ref(int, 15);
+    float *bonusPtr = auto_ref(float, 2.5);
+
+    // Access the values using dereferencing
+    print("Initial Score: ");
+    print(*scorePtr);      // 15
+
+    print("Initial Bonus: ");
+    print(*bonusPtr);      // 2.5
+
+
+    // --- Quantum Pointer: synchronize multiple variables ---
+    float levelA = 1.0;
+    float levelB = 2.0;
+    float levelC = 3.0;
+
+    float *|levels = { &levelA, &levelB, &levelC };
+
+    // Apply the same update to all variables at once
+    *|levels += *bonusPtr;
+
+
+    display("=== Updated Levels ===");
+    display("Level A: {levelA}");
+    display("Level B: {levelB}");
+    display("Level C: {levelC}");
+
+    // Update the score using the pointer
+    *scorePtr += 10;
+
+    display("Final Score: {*scorePtr}");
+
+    exit();
+}

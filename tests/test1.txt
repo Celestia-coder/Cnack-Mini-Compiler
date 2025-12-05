@@ -1,0 +1,13 @@
+// Simple program that display the sum of two integers
+
+execute() {
+    int a = 10;
+    int b = 20;
+    int sum;
+
+    sum = a + b;
+
+    display("Sum: {sum}");
+
+    exit();
+}

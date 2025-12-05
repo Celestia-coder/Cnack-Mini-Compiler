@@ -1,0 +1,23 @@
+// Simple test for error detection
+
+execute() {
+    // Valid code
+    int valid = 100;
+
+    // Invalid characters that should be marked as ERROR
+    int error1 @ 50;
+    float error2 # 3.14;
+    char error3 $ 'X';
+    string error4 ? "text";
+
+    // Backtick and backslash
+    value1 ` test;
+    value2 \ test;
+
+    // Mixed valid and invalid
+    if (x > 10) {
+        result @ invalid;
+    }
+
+    exit();
+}
