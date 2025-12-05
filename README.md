@@ -1,8 +1,13 @@
-# Cnack Mini Compiler
+# 🍪 Cnack Mini Compiler
 
-To run the website
+A **web-based lexical analyzer** for the CNACK programming language. Input your code and see it broken down into tokens (keywords, identifiers, operators, numbers, etc.).
 
-## BACKEND
+## 📋 Prerequisites
+
+- **Node.js**
+- **GCC** (for compiling the lexer if you make changes)
+
+### BACKEND
 
 Step 1: Go to backend folder
 
@@ -16,7 +21,7 @@ Step 2: Start the backend server
 node server.js
 ```
 
-## FRONTEND
+### FRONTEND
 
 Step 1: Go to frontend folder
 
@@ -30,48 +35,29 @@ Step 2: Run the frontend
 npm run dev
 ```
 
-## GIT BRANCH
+## 🔧 Making Changes to the Lexer
 
-<b>Create Your Branch</b>
+If you modify `lexer.c`:
 
-Step 1: Make sure you're inside the project folder.
+Step 1: Recompile the lexer
 
-Step 2: Create and switch to your own branch:
-
-```
-git checkout -b branch-name
+```cmd
+gcc lexer.c -o bin/lexer
 ```
 
-<b>Save Your Work</b>
+Step 2: Restart the backend server
 
-Step 3: Add your changes to the branch:
-
-```
-git add .
-git commit -m "your message"
+```cmd
+node server.js
 ```
 
-Step 4: Push your branch to Github.
+## 📖 How to Use
 
-```
-git push -u origin branch-name
-```
+1. Open the website.
+2. Type or paste CNACK code in the input area.
+3. Click "Analyze"
+4. View the token results (line number, token type, lexeme).
 
-<b>Make a Pull Request (PR)</b>
+---
 
-1. Go to GitHub
-2. Open Pull Requests
-3. Click New Pull Request
-4. Set:
-   - base: main
-   - compare: your branch
-5. Click Create Pull Request
-
-<b>Update Your Main Branch</b>
-
-Step 5: Pull the main before starting new work
-
-```
-git checkout main
-git pull
-```
+<p align="center">✨ The familiar flavor of C, now with extra crunch ✨</p>
