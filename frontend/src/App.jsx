@@ -90,6 +90,8 @@ const CodeEditor = ({ value, onChange, disabled }) => {
           color: "#4a89c6",
           textAlign: "right",
           paddingRight: "16px",   // <--- FIX: More padding between number and border
+          paddingTop: "20px",
+          paddingBottom: "20px",
           overflow: "hidden", 
           userSelect: "none",
           boxSizing: "border-box"
