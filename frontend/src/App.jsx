@@ -73,7 +73,7 @@ const CodeEditor = ({ value, onChange, disabled }) => {
     fontFamily: '"Fira Code", "Consolas", monospace',
     fontSize: "13px",
     lineHeight: "21px",    
-    paddingTop: "10px",    // <--- FIX: Reduced from 20px to move content "up"
+    paddingTop: "10px",
     paddingBottom: "10px", 
   }
 
@@ -84,12 +84,12 @@ const CodeEditor = ({ value, onChange, disabled }) => {
         ref={lineNumbersRef}
         style={{
           ...sharedStyles,
-          width: "60px",          // <--- FIX: Increased width (was 50px) for more space
+          width: "60px",
           background: "#f8fafc",
           borderRight: "1px solid #e0e7ff",
           color: "#4a89c6",
           textAlign: "right",
-          paddingRight: "16px",   // <--- FIX: More padding between number and border
+          paddingRight: "16px",
           paddingTop: "20px",
           paddingBottom: "20px",
           overflow: "hidden", 
@@ -113,7 +113,7 @@ const CodeEditor = ({ value, onChange, disabled }) => {
         style={{
           ...sharedStyles,
           flex: 1,
-          paddingLeft: "24px",   // <--- FIX: Increased padding (was 20px) for separation
+          paddingLeft: "24px",
           paddingRight: "20px",
           paddingTop: "20px",
           paddingBottom: "5px",
@@ -165,6 +165,31 @@ const parseTokenOutput = (output) => {
 const Output = ({ output, error, loading }) => {
   const tokens = output ? parseTokenOutput(output) : []
 
+  const handleDownload = () => {
+    if (!output) return
+
+    // Check if output already has the full format with END OF ANALYSIS
+    let content = output
+    
+    // If the output doesn't contain "END OF ANALYSIS", add it
+    if (!output.includes("END OF ANALYSIS")) {
+      content = output + "\n================================================\n"
+      content += "     END OF ANALYSIS\n"
+      content += "================================================\n"
+    }
+
+    // Create blob and download
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'lexical_analysis_output.txt'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div
       style={{
@@ -174,7 +199,7 @@ const Output = ({ output, error, loading }) => {
         background: "#ffffff",
       }}
     >
-      {/* Header */}
+      {/* Header with Download Button */}
       <div
         style={{
           padding: "16px 24px",
@@ -185,10 +210,58 @@ const Output = ({ output, error, loading }) => {
           fontSize: "13px",
           textTransform: "uppercase",
           letterSpacing: "0.5px",
-          textAlign: "center",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
         }}
       >
-        Lexical Analysis
+        <span>Lexical Analysis</span>
+        
+        {tokens.length > 0 && (
+          <button
+            onClick={handleDownload}
+            style={{
+              padding: "6px 16px",
+              background: "#ffffff",
+              color: "#0f4687",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "11px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = "#e0e7ff"
+              e.target.style.transform = "translateY(-1px)"
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = "#ffffff"
+              e.target.style.transform = "translateY(0)"
+            }}
+          >
+            <svg 
+              width="14" 
+              height="14" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Download
+          </button>
+        )}
       </div>
 
       {/* Scrollable Content */}

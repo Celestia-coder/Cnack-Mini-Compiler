@@ -544,8 +544,6 @@ void printTokenToFile(Token t, FILE *file)
 
             /* Print with cleaned lexeme */
             printf("%-6d | %-20s | %s\n", t.line, tokenTypeName, cleaned);
-            if (file)
-                fprintf(file, "%-6d | %-20s | %s\n", t.line, tokenTypeName, cleaned);
 
             free(cleaned);
         }
@@ -554,8 +552,6 @@ void printTokenToFile(Token t, FILE *file)
     {
         /* Normal printing for other tokens */
         printf("%-6d | %-20s | %.*s\n", t.line, tokenTypeName, t.lexeme_length, t.lexeme_start);
-        if (file)
-            fprintf(file, "%-6d | %-20s | %.*s\n", t.line, tokenTypeName, t.lexeme_length, t.lexeme_start);
     }
 }
 
@@ -985,41 +981,10 @@ Token getNextToken()
     }
 }
 
-// /* Analyze code from string */
-// void analyzeCode(const char *code)
-// {
-//     Token token;
-
-//     /* Initialize scanner */
-//     initScanner(code);
-
-//     printf(">>> LEXICAL ANALYSIS RESULTS:\n");
-//     printf("--------------------------------------------------\n");
-
-//     /* Print table header */
-//     printf("LINE   | TOKEN TYPE           | LEXEME\n");
-//     printf("-------|----------------------|---------------------------\n");
-
-//     /* Process all tokens including EOF */
-//     do
-//     {
-//         token = getNextToken();
-//         printToken(token);
-//     } while (token.type != TOKEN_EOF);
-// }
-
 /* Analyze code from string */
 void analyzeCode(const char *code)
 {
     Token token;
-    FILE *outputFile;
-
-    /* Open output file for writing */
-    outputFile = fopen("lexical_analysis_output.txt", "w");
-    if (outputFile == NULL)
-    {
-        fprintf(stderr, "Warning: Could not create output file. Results will only be displayed on screen.\n");
-    }
 
     /* Initialize scanner */
     initScanner(code);
@@ -1031,37 +996,17 @@ void analyzeCode(const char *code)
     printf("LINE   | TOKEN TYPE           | LEXEME\n");
     printf("-------|----------------------|----------------------------------\n");
 
-    /* Print header to file */
-    if (outputFile)
-    {
-        fprintf(outputFile, "================================================\n");
-        fprintf(outputFile, "     LEXICAL ANALYSIS RESULTS\n");
-        fprintf(outputFile, "================================================\n");
-        fprintf(outputFile, "LINE   | TOKEN TYPE           | LEXEME\n");
-        fprintf(outputFile, "-------|----------------------|----------------------------------\n");
-    }
-
     /* Process all tokens including EOF */
     do
     {
         token = getNextToken();
-        printTokenToFile(token, outputFile);
+        printTokenToFile(token, NULL);
     } while (token.type != TOKEN_EOF);
 
     /* Print footer to stdout */
     printf("================================================\n");
     printf("     END OF ANALYSIS\n");
     printf("================================================\n");
-
-    /* Print footer to file */
-    if (outputFile)
-    {
-        fprintf(outputFile, "================================================\n");
-        fprintf(outputFile, "     END OF ANALYSIS\n");
-        fprintf(outputFile, "================================================\n");
-        fclose(outputFile);
-        printf("\n>>> Analysis saved to 'lexical_analysis_output.txt'\n");
-    }
 }
 
 /* ========== MAIN PROGRAM ========== */
