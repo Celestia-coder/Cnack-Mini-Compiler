@@ -35,7 +35,7 @@ typedef enum
     TOKEN_MOD_ASSIGN_OP,  // %=
 
     /* --- Unary Operators --- */
-    TOKEN_ADDRESS_OF_OP, // & (for dereferencing pointer)
+    TOKEN_ADDRESS_OF_OP, // & (for referencing pointer)
     TOKEN_INCREMENT_OP,  // ++
     TOKEN_DECREMENT_OP,  // --
 
@@ -53,7 +53,7 @@ typedef enum
     TOKEN_LOGICAL_OR_OP,  // ||
 
     /* --- Pointer Structure Operator --- */
-    TOKEN_POINTER_OP,         // * (for signaling a pointer)
+    TOKEN_POINTER_OP,         // * (for signaling and dereferencing a pointer)
     TOKEN_ARROW_OP,           // -> (for accessing a pointer)
     TOKEN_QUANTUM_POINTER_OP, // *| (special operator)
 
@@ -213,7 +213,7 @@ int isOperator(char c)
     case '&':
     case '|':
     case '^':
-    case '~':
+        // case '~':
         return 1;
     default:
         return 0;
@@ -301,6 +301,24 @@ Token createErrorToken(const char *message)
     tok.lexeme_length = (int)strlen(message);
     tok.line = scanner.line_number;
     return tok;
+}
+
+/* Check if operator is stuck to identifier/number without space, consume as error if true */
+Token checkOperatorBoundary(TokenType operatorType)
+{
+    /* Check if operator is stuck to identifier/number without space */
+    if (isLetter(currentChar()) || isDigit(currentChar()) || currentChar() == '_')
+    {
+        /* Consume entire malformed token */
+        while (isLetter(currentChar()) || isDigit(currentChar()) || 
+               currentChar() == '_' || isOperator(currentChar()))
+        {
+            consumeChar();
+        }
+        return createErrorToken("Invalid token");
+    }
+    /* Operator is properly separated, return valid token */
+    return createToken(operatorType);
 }
 
 /* ========== TOKEN UTILITY FUNCTIONS ========== */
@@ -501,11 +519,44 @@ const char *getTokenTypeName(TokenType type)
     }
 }
 
-void printToken(Token t)
+/* Print token to both stdout and file */
+void printTokenToFile(Token t, FILE *file)
 {
-    /* Print in table format using pointer and length */
-    printf("%-6d | %-20s | %.*s\n", t.line, getTokenTypeName(t.type),
-           t.lexeme_length, t.lexeme_start);
+    const char *tokenTypeName = getTokenTypeName(t.type);
+
+    /* For multi-line comments and strings, replace newlines with spaces for clean display */
+    if (t.type == TOKEN_MULTI_COMMENT || t.type == TOKEN_STRING)
+    {
+        /* Allocate buffer for cleaned lexeme */
+        char *cleaned = (char *)malloc(t.lexeme_length + 1);
+        if (cleaned)
+        {
+            /* Copy lexeme and replace newlines/tabs with spaces */
+            for (int i = 0; i < t.lexeme_length; i++)
+            {
+                char c = t.lexeme_start[i];
+                if (c == '\n' || c == '\r' || c == '\t')
+                    cleaned[i] = ' ';
+                else
+                    cleaned[i] = c;
+            }
+            cleaned[t.lexeme_length] = '\0';
+
+            /* Print with cleaned lexeme */
+            printf("%-6d | %-20s | %s\n", t.line, tokenTypeName, cleaned);
+            if (file)
+                fprintf(file, "%-6d | %-20s | %s\n", t.line, tokenTypeName, cleaned);
+
+            free(cleaned);
+        }
+    }
+    else
+    {
+        /* Normal printing for other tokens */
+        printf("%-6d | %-20s | %.*s\n", t.line, tokenTypeName, t.lexeme_length, t.lexeme_start);
+        if (file)
+            fprintf(file, "%-6d | %-20s | %.*s\n", t.line, tokenTypeName, t.lexeme_length, t.lexeme_start);
+    }
 }
 
 void initScanner(const char *source)
@@ -556,6 +607,29 @@ Token scanIdentifier()
     /* Check if it's a keyword and return specific token type */
     int len = (int)(scanner.scan_ptr - scanner.token_start);
     TokenType type = getKeywordType(scanner.token_start, len);
+
+    /* ERROR: Check if data type is immediately followed by * (pointer) without space*/
+    if ((type == TOKEN_TYPE_INT || type == TOKEN_TYPE_FLOAT ||
+         type == TOKEN_TYPE_CHAR || type == TOKEN_TYPE_BOOL ||
+         type == TOKEN_TYPE_STRING) &&
+        currentChar() == '*')
+    {
+        consumeChar(); /* consume the * */
+        return createErrorToken("Invalid token");
+    }
+
+    /* ERROR: Check if identifier is immediately followed by an operator without space*/
+    if (isOperator(currentChar()) && !isWhitespace(currentChar()))
+    {
+        /* Consume the operator and any following characters to form complete error token */
+        while (isOperator(currentChar()) || isLetter(currentChar()) ||
+               isDigit(currentChar()) || currentChar() == '_')
+        {
+            consumeChar();
+        }
+        return createErrorToken("Invalid token");
+    }
+
     return createToken(type);
 }
 
@@ -580,6 +654,29 @@ Token scanNumber()
         }
     }
 
+    /* ERROR: Check if a letter or underscore immediately follows the number*/
+    if (isLetter(currentChar()) || currentChar() == '_')
+    {
+        /* Consume the rest of the malformed token */
+        while (isLetter(currentChar()) || isDigit(currentChar()) || currentChar() == '_')
+        {
+            consumeChar();
+        }
+        return createErrorToken("Invalid token");
+    }
+
+    /* ERROR: Check if an operator immediately follows the number without space*/
+    if (isOperator(currentChar()) && !isWhitespace(currentChar()))
+    {
+        /* Consume the operator and any following characters to form complete error token */
+        while (isOperator(currentChar()) || isLetter(currentChar()) ||
+               isDigit(currentChar()) || currentChar() == '_')
+        {
+            consumeChar();
+        }
+        return createErrorToken("Invalid token");
+    }
+
     return createToken(isFloat ? TOKEN_NUMBER_FLOAT : TOKEN_NUMBER_INT);
 }
 
@@ -595,7 +692,7 @@ Token scanString(char quote)
 
     if (reachedEnd())
     {
-        return createErrorToken("Unterminated string");
+        return createErrorToken("Invalid token");
     }
 
     consumeChar(); /* closing quote */
@@ -629,7 +726,7 @@ Token scanMultiLineComment()
         }
         consumeChar();
     }
-    return createErrorToken("Unterminated comment");
+    return createErrorToken("Invalid token");
 }
 
 /* Main token scanner */
@@ -672,39 +769,82 @@ Token getNextToken()
     {
     case '+':
         if (matchNext('+'))
+        {
+            /* Check for invalid +++, ++= */
+            if (currentChar() == '+' || currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_INCREMENT_OP);
+        }
         if (matchNext('='))
+        {
+            /* Check for invalid += followed by = */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_ADD_ASSIGN_OP);
-        return createToken(TOKEN_ADD_OP);
+        }
+        return checkOperatorBoundary(TOKEN_ADD_OP);
 
     case '-':
         if (matchNext('-'))
+        {
+            /* Check for invalid ---, --= */
+            if (currentChar() == '-' || currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_DECREMENT_OP);
+        }
         if (matchNext('='))
+        {
+            /* Check for invalid -= followed by = */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_SUB_ASSIGN_OP);
+        }
         if (matchNext('>'))
+        {
+            /* Check for invalid -> followed by operator chars */
+            if (isOperator(currentChar()))
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_ARROW_OP);
-        return createToken(TOKEN_SUB_OP);
+        }
+        return checkOperatorBoundary(TOKEN_SUB_OP);
 
     case '*':
         /* Check for *| (quantum pointer operator) */
         if (currentChar() == '|')
         {
             consumeChar(); /* consume the | */
+            /* Check for invalid *| followed by operator chars */
+            if (isOperator(currentChar()))
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_QUANTUM_POINTER_OP);
         }
         /* Check for *= (multiply assign) */
         if (currentChar() == '=')
         {
             consumeChar(); /* consume the = */
+            /* Check for invalid *= followed by = */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_MULT_ASSIGN_OP);
         }
-        /* Check if it's likely a pointer: * NOT followed by whitespace and followed by identifier
-         * This catches a case like: int *ptr
-         * But allows: a * b (with spaces) to be multiplication */
+        /* Check for invalid ** (not defined in CNACK) */
+        if (currentChar() == '*')
+            return createErrorToken("Invalid token");
+
+        /* Check if it's likely a pointer: * NOT followed by whitespace and followed by identifier */
         if (!isWhitespace(currentChar()) && (isLetter(currentChar()) || currentChar() == '_' || currentChar() == '*'))
         {
             return createToken(TOKEN_POINTER_OP);
+        }
+        /* Check if operator is stuck to number without space */
+        if (isDigit(currentChar()))
+        {
+            while (isLetter(currentChar()) || isDigit(currentChar()) || 
+                   currentChar() == '_' || isOperator(currentChar()))
+            {
+                consumeChar();
+            }
+            return createErrorToken("Invalid token");
         }
         /* Otherwise it's multiplication */
         return createToken(TOKEN_MULT_OP);
@@ -712,6 +852,9 @@ Token getNextToken()
     case '/':
         if (matchNext('='))
         {
+            /* Check for invalid /= followed by = */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_DIV_ASSIGN_OP);
         }
         else if (matchNext('/'))
@@ -722,48 +865,93 @@ Token getNextToken()
         {
             return scanMultiLineComment();
         }
-        return createToken(TOKEN_DIV_OP);
+        return checkOperatorBoundary(TOKEN_DIV_OP);
 
     case '%':
         if (matchNext('='))
+        {
+            /* Check for invalid %= followed by = */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_MOD_ASSIGN_OP);
-        return createToken(TOKEN_MOD_OP);
+        }
+        return checkOperatorBoundary(TOKEN_MOD_OP);
 
     case '=':
         if (matchNext('='))
+        {
+            /* Check for invalid === */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_EQUAL_TO_OP);
-        return createToken(TOKEN_ASSIGN_OP);
+        }
+        return checkOperatorBoundary(TOKEN_ASSIGN_OP);
 
     case '<':
         if (matchNext('='))
+        {
+            /* Check for invalid <== */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_LESS_EQUAL_OP);
-        return createToken(TOKEN_LESS_OP);
+        }
+        /* Check for invalid << or <<= (bit shift not defined in CNACK) */
+        if (currentChar() == '<')
+            return createErrorToken("Invalid token");
+        return checkOperatorBoundary(TOKEN_LESS_OP);
 
     case '>':
         if (matchNext('='))
+        {
+            /* Check for invalid >== */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_GREATER_EQUAL_OP);
-        return createToken(TOKEN_GREATER_OP);
+        }
+        /* Check for invalid >> or >>= (bit shift not defined in CNACK) */
+        if (currentChar() == '>')
+            return createErrorToken("Invalid token");
+        return checkOperatorBoundary(TOKEN_GREATER_OP);
 
     case '!':
         if (matchNext('='))
+        {
+            /* Check for invalid !== */
+            if (currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_NOT_EQUAL_TO_OP);
-        return createToken(TOKEN_LOGICAL_NOT_OP);
+        }
+        return checkOperatorBoundary(TOKEN_LOGICAL_NOT_OP);
 
     case '&':
         if (matchNext('&'))
+        {
+            /* Check for invalid &&& or &&= */
+            if (currentChar() == '&' || currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_LOGICAL_AND_OP);
-        return createToken(TOKEN_ADDRESS_OF_OP);
+        }
+        /* Check for invalid &= (bitwise AND assignment not defined) */
+        if (currentChar() == '=')
+            return createErrorToken("Invalid token");
+        return checkOperatorBoundary(TOKEN_ADDRESS_OF_OP);
 
     case '|':
         if (matchNext('|'))
+        {
+            /* Check for invalid ||| or ||= */
+            if (currentChar() == '|' || currentChar() == '=')
+                return createErrorToken("Invalid token");
             return createToken(TOKEN_LOGICAL_OR_OP);
-        return createErrorToken("Unexpected character '|'");
+        }
+        /* Single | is not valid in CNACK (not a bitwise OR operator) */
+        return createErrorToken("Invalid token");
 
     case '^':
-        return createToken(TOKEN_EXPO_OP);
-
-    case '~':
-        return createErrorToken("Unexpected character '~'");
+        /* Check for invalid ^= (XOR assignment not defined) */
+        if (currentChar() == '=')
+            return createErrorToken("Invalid token");
+        return checkOperatorBoundary(TOKEN_EXPO_OP);
 
     /* Separators */
     case ',':
@@ -793,31 +981,87 @@ Token getNextToken()
 
     /* Unknown character */
     default:
-        return createErrorToken("Unexpected character");
+        return createErrorToken("Invalid token");
     }
 }
+
+// /* Analyze code from string */
+// void analyzeCode(const char *code)
+// {
+//     Token token;
+
+//     /* Initialize scanner */
+//     initScanner(code);
+
+//     printf(">>> LEXICAL ANALYSIS RESULTS:\n");
+//     printf("--------------------------------------------------\n");
+
+//     /* Print table header */
+//     printf("LINE   | TOKEN TYPE           | LEXEME\n");
+//     printf("-------|----------------------|---------------------------\n");
+
+//     /* Process all tokens including EOF */
+//     do
+//     {
+//         token = getNextToken();
+//         printToken(token);
+//     } while (token.type != TOKEN_EOF);
+// }
 
 /* Analyze code from string */
 void analyzeCode(const char *code)
 {
     Token token;
+    FILE *outputFile;
+
+    /* Open output file for writing */
+    outputFile = fopen("lexical_analysis_output.txt", "w");
+    if (outputFile == NULL)
+    {
+        fprintf(stderr, "Warning: Could not create output file. Results will only be displayed on screen.\n");
+    }
 
     /* Initialize scanner */
     initScanner(code);
 
-    printf(">>> LEXICAL ANALYSIS RESULTS:\n");
-    printf("--------------------------------------------------\n");
-
-    /* Print table header */
+    /* Print header to stdout */
+    printf("================================================\n");
+    printf("     LEXICAL ANALYSIS RESULTS\n");
+    printf("================================================\n");
     printf("LINE   | TOKEN TYPE           | LEXEME\n");
-    printf("-------|----------------------|---------------------------\n");
+    printf("-------|----------------------|----------------------------------\n");
+
+    /* Print header to file */
+    if (outputFile)
+    {
+        fprintf(outputFile, "================================================\n");
+        fprintf(outputFile, "     LEXICAL ANALYSIS RESULTS\n");
+        fprintf(outputFile, "================================================\n");
+        fprintf(outputFile, "LINE   | TOKEN TYPE           | LEXEME\n");
+        fprintf(outputFile, "-------|----------------------|----------------------------------\n");
+    }
 
     /* Process all tokens including EOF */
     do
     {
         token = getNextToken();
-        printToken(token);
+        printTokenToFile(token, outputFile);
     } while (token.type != TOKEN_EOF);
+
+    /* Print footer to stdout */
+    printf("================================================\n");
+    printf("     END OF ANALYSIS\n");
+    printf("================================================\n");
+
+    /* Print footer to file */
+    if (outputFile)
+    {
+        fprintf(outputFile, "================================================\n");
+        fprintf(outputFile, "     END OF ANALYSIS\n");
+        fprintf(outputFile, "================================================\n");
+        fclose(outputFile);
+        printf("\n>>> Analysis saved to 'lexical_analysis_output.txt'\n");
+    }
 }
 
 /* ========== MAIN PROGRAM ========== */
