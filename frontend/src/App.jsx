@@ -199,10 +199,11 @@ const Output = ({ output, error, loading }) => {
         background: "#ffffff",
       }}
     >
-      {/* Header with Download Button */}
+      {/* Header with Fixed Height and Vertical Centering */}
       <div
         style={{
-          padding: "16px 24px",
+          height: "64px", // Fixed height to prevent shifting
+          padding: "0 24px", // Horizontal padding only
           background: "rgba(15, 69, 135, 1)",
           borderBottom: "1px solid #c7d2fe",
           color: "#ffffffff",
@@ -217,51 +218,52 @@ const Output = ({ output, error, loading }) => {
       >
         <span>Lexical Analysis</span>
         
-        {tokens.length > 0 && (
-          <button
-            onClick={handleDownload}
-            style={{
-              padding: "6px 16px",
-              background: "#ffffff",
-              color: "#0f4687",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "11px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              textTransform: "uppercase",
-              letterSpacing: "0.5px",
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = "#e0e7ff"
-              e.target.style.transform = "translateY(-1px)"
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = "#ffffff"
-              e.target.style.transform = "translateY(0)"
-            }}
-          >
-            <svg 
-              width="14" 
-              height="14" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round"
+        {/* Reserve space for the button even if it is not visible */}
+        <div style={{ height: "32px", display: "flex", alignItems: "center" }}>
+          {tokens.length > 0 && (
+            <button
+              onClick={handleDownload}
+              style={{
+                padding: "6px 16px",
+                background: "#ffffff",
+                color: "#0f4687",
+                border: "1px solid #c7d2fe",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = "#e0e7ff"
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = "#ffffff"
+              }}
             >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            Download
-          </button>
-        )}
+              <svg 
+                width="14" 
+                height="14" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Scrollable Content */}
@@ -367,7 +369,8 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
       {/* Header */}
       <div
         style={{
-          padding: "16px 24px",
+          height: "64px", 
+          padding: "0 24px", 
           background: "rgba(15, 69, 135, 1)",
           borderBottom: "1px solid #e0e7ff",
           display: "flex",
@@ -391,13 +394,13 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
           onClick={onClear}
           disabled={loading}
           style={{
-            padding: "6px 12px",
-            background: "#e0e7ff",
+            padding: "6px 16px",
+            background: "#ffffffff",
             borderRadius: "6px",
             color: "#0f4687",
             border: "1px solid #c7d2fe",
             cursor: loading ? "not-allowed" : "pointer",
-            fontSize: "12px",
+            fontSize: "11px",
             fontWeight: "500",
             transition: "all 0.15s",
             opacity: loading ? 0.5 : 1,
@@ -410,12 +413,12 @@ const Editor = ({ code, setCode, onRun, onClear, loading }) => {
           }}
           onMouseLeave={(e) => {
             if (!loading) {
-              e.target.style.background = "#e0e7ff"
+              e.target.style.background = "#ffffffff"
               e.target.style.color = "#0f4687"
             }
           }}
         >
-          Clear
+          CLEAR
         </button>
       </div>
 
