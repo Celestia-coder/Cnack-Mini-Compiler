@@ -148,7 +148,33 @@ const parseTokenOutput = (output) => {
 
 // -------------------- Output Component --------------------
 const Output = ({ output, error, loading, darkMode }) => {
-  const tokens = output ? parseTokenOutput(output) : []
+  const [filterLine, setFilterLine] = useState("");
+
+  const parseTokenOutput = (out) => {
+    const lines = out.split("\n");
+    const tokens = []
+    let startParsing = false
+    for (const line of lines) {
+      if (line.includes("-------|")) { startParsing = true; continue }
+      if (startParsing && line.trim()) {
+        const first = line.indexOf("|")
+        const second = line.indexOf("|", first + 1)
+        if (first !== -1 && second !== -1) {
+          const lineNum = line.slice(0, first).trim()
+          const type = line.slice(first + 1, second).trim()
+          const lexeme = line.slice(second + 1).trim()
+          tokens.push({ line: lineNum, type, lexeme })
+        }
+      }
+    }
+    return tokens
+  }
+
+  let tokens = output ? parseTokenOutput(output) : []
+
+  if (filterLine.trim() !== "") {
+    tokens = tokens.filter(t => t.line === filterLine.trim());
+  }
 
   const handleDownload = () => {
     if (!output) return
@@ -169,49 +195,82 @@ const Output = ({ output, error, loading, darkMode }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: darkMode ? "#1f2730" : "#ffffff" }}>
-      <div
-        style={{
-          height: "60px",
-          padding: "0 24px",
-          background: darkMode ? "#0f4687" : "rgba(15, 69, 135, 1)",
-          borderBottom: `1px solid ${darkMode ? "#334155" : "#c7d2fe"}`,
-          color: "#ffffff",
-          fontWeight: "600",
-          fontSize: "13px",
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <span>Lexical Analysis</span>
-        {tokens.length > 0 && (
+      <div style={{
+        height: "60px", padding: "0 24px", background: darkMode ? "#0f4687" : "rgba(15, 69, 135, 1)",
+        borderBottom: `1px solid ${darkMode ? "#334155" : "#c7d2fe"}`,
+        color: "#ffffff", fontWeight: "600", fontSize: "13px", textTransform: "uppercase",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <span>Lexical Analysis</span>
+          
+          {/* LINE FILTER INPUT */}
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            background: darkMode ? "#275893" : "rgba(255,255,255,0.1)", 
+            borderRadius: "4px", 
+            padding: "2px 10px", 
+            border: darkMode ? "1px solid #4a89c6" : "1px solid rgba(255,255,255,0.2)",
+            marginBottom: "-1px",
+            height: "16px" 
+          }}>
+            <span style={{ 
+              fontSize: "10px", 
+              color: "#ffffff", 
+              marginRight: "4px",
+              display: "flex",
+              alignItems: "center"
+            }}>LINE:</span>
+            
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              
+              {!filterLine && (
+                <span style={{
+                  position: "absolute",
+                  left: "0",
+                  width: "100%",
+                  textAlign: "center",
+                  color: "#ffffff",
+                  fontSize: "10px",
+                  pointerEvents: "none",
+                  opacity: 0.9
+                }}>
+                  All
+                </span>
+              )}
+              <input 
+                type="text" 
+                value={filterLine}
+                onChange={(e) => setFilterLine(e.target.value)}
+                style={{
+                  width: "40px",
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#ffffff",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  textAlign: "center",
+                  lineHeight: "1",
+                  padding: 0,
+                  margin: 0
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {output && !loading && (
           <button
             onClick={handleDownload}
             style={{
-              padding: "6px 16px",
-              background: "#ffffff",
-              color: "#0f4687",
-              border: "1px solid #c7d2fe",
-              borderRadius: "6px",
-              fontSize: "11px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all 0.15s",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              textTransform: "uppercase",
+              padding: "6px 16px", background: "#ffffff", color: "#0f4687", border: "1px solid #c7d2fe",
+              borderRadius: "6px", fontSize: "11px", fontWeight: "600", cursor: "pointer",
+              transition: "all 0.15s", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase",
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#c7d2fe"
-              e.currentTarget.style.color = "#0e5398"
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#ffffff"
-              e.currentTarget.style.color = "#0f4687"
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#c7d2fe"; e.currentTarget.style.color = "#0e5398" }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.color = "#0f4687" }}
           >
             Download
           </button>
@@ -231,13 +290,20 @@ const Output = ({ output, error, loading, darkMode }) => {
               <div>Line</div><div>Type</div><div>Lexeme</div>
             </div>
             {tokens.map((t, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "12px 20px", background: i % 2 === 0 ? (darkMode ? "#1f2730" : "#ffffff") : (darkMode ? "#28313b" : "#f8fafc"), borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`, fontSize: "13px", textAlign: "center", color: darkMode ? "#cbd5e1" : "#0f4687" }}>
+              <div key={i} style={{ 
+                display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "12px 20px", 
+                background: i % 2 === 0 ? (darkMode ? "#1f2730" : "#ffffff") : (darkMode ? "#28313b" : "#f8fafc"), 
+                borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`, 
+                fontSize: "13px", textAlign: "center", color: darkMode ? "#cbd5e1" : "#0f4687" 
+              }}>
                 <div>{t.line}</div><div>{t.type}</div><div>{t.lexeme}</div>
               </div>
             ))}
           </div>
         ) : (
-          <div style={{ textAlign: "center", padding: "40px", color: "#4a89c6", fontSize: "13px" }}>No analysis yet.</div>
+          <div style={{ textAlign: "center", padding: "40px", color: "#4a89c6", fontSize: "13px" }}>
+            {filterLine ? `No tokens found for line ${filterLine}.` : "No analysis yet."}
+          </div>
         )}
       </div>
     </div>
