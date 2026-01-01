@@ -21,66 +21,144 @@ const runLexicalAnalysis = async (code) => {
 
 // -------------------- Code Editor Component --------------------
 const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
-  const editorRef = useRef(null)
-  const lineNumbersRef = useRef(null)
+  const editorRef = useRef(null);
+  const lineNumbersRef = useRef(null);
+  const highlightRef = useRef(null);
 
   const handleScroll = useCallback(() => {
-    if (editorRef.current && lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = editorRef.current.scrollTop
+    if (editorRef.current && lineNumbersRef.current && highlightRef.current) {
+      const { scrollTop, scrollLeft } = editorRef.current;
+      lineNumbersRef.current.scrollTop = scrollTop;
+      highlightRef.current.scrollTop = scrollTop;
+      highlightRef.current.scrollLeft = scrollLeft;
     }
-  }, [])
+  }, []);
+
+  useEffect(() => {
+    handleScroll();
+  }, [value, handleScroll]);
 
   const handleKeyDown = (e) => {
-    const start = e.target.selectionStart
-    const end = e.target.selectionEnd
+    if (disabled) return;
+    const start = e.target.selectionStart;
+    const end = e.target.selectionEnd;
 
     if (e.key === "Tab") {
-      e.preventDefault()
-      const newValue = value.substring(0, start) + "    " + value.substring(end)
-      onChange(newValue)
+      e.preventDefault();
+      const newValue = value.substring(0, start) + "    " + value.substring(end);
+      onChange(newValue);
       setTimeout(() => {
-        e.target.selectionStart = e.target.selectionEnd = start + 4
-      }, 0)
+        editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 4;
+      }, 0);
     }
 
     if (e.key === "Enter") {
-      e.preventDefault()
-      const lines = value.substring(0, start).split('\n');
+      e.preventDefault();
+      const lines = value.substring(0, start).split("\n");
       const currentLine = lines[lines.length - 1];
       const match = currentLine.match(/^(\s*)/);
-      let indent = match ? match[0] : ''; 
+      let indent = match ? match[0] : "";
+      
       const trimmedLine = currentLine.trim();
-    
-      if (trimmedLine.endsWith('{') || trimmedLine.endsWith('(') || trimmedLine.endsWith('[')) {
-        indent += '    ';
+      if (trimmedLine.endsWith("{") || trimmedLine.endsWith("(") || trimmedLine.endsWith("[")) {
+        indent += "    ";
       }
 
-      const newValue = value.substring(0, start) + "\n" + indent + value.substring(end)
-      onChange(newValue)
-      setTimeout(() => {
-        e.target.selectionStart = e.target.selectionEnd = start + 1 + indent.length
-      }, 0)
-    }
-  }
 
-  const lines = value.split("\n").length
-  const lineNumbers = Array.from({ length: lines }, (_, i) => i + 1).join("\n")
+      const newValue = value.substring(0, start) + "\n" + indent + value.substring(end);
+      onChange(newValue);
+      setTimeout(() => {
+        editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 1 + indent.length;
+      }, 0);
+    }
+  };
+
+  const renderHighlightedCode = () => {
+  const words = value.split(/(\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^\\"])*"|\s+|<<|>>|==|!=|<=|>=|&&|\|\||\*\||[()\[\]{};,:]|[-+*/%<>&!|=])/);
+  
+  return words.map((word, i) => {
+    if (!word) return null;
+    
+    let color = darkMode ? "#e2e8f0" : "#0f4687"; // Default text
+
+    if (word.startsWith('"') && word.endsWith('"')) {
+      const stringColor = "#80a6c0ff";
+      const parts = word.split(/(\{.*?\})/g);
+      
+      return (
+        <span key={i} style={{ color: stringColor }}>
+          {parts.map((part, j) => {
+            if (part.startsWith('{') && part.endsWith('}')) {
+              const content = part.slice(1, -1);
+              const subTokens = content.split(/(\*|\||[-+/%<>&!=])/g);
+              
+              return (
+                <span key={j}>
+                  <span style={{ color: darkMode ? "#94a3b8" : "#4a89c6" }}>{'{'}</span>
+                  {subTokens.map((st, k) => {
+                    let stColor = darkMode ? "#e2e8f0" : "#0f4687";
+                    // Color symbols/operators inside the braces (like the * in *scorePtr)
+                    if (/^([-+*/%<>&!|=])$/.test(st)) {
+                      stColor = "#b63388ff"; 
+                    }
+                    return <span key={k} style={{ color: stColor }}>{st}</span>;
+                  })}
+                  <span style={{ color: darkMode ? "#94a3b8" : "#4a89c6" }}>{'}'}</span>
+                </span>
+              );
+            }
+            return part;
+          })}
+        </span>
+      );
+    }
+
+    // Comments
+    if (word.startsWith("//") || word.startsWith("/*")) {
+      color = "#6272a4"; 
+    } 
+    // Keywords
+    else if (/^(int|string|float|char|double|boolean|void|if|else|elif|switch|case|default|assign|otherwise|while|for|do while|break|continue|return|execute|exit|const|ask|display|true|false|fetch|when)$/.test(word)) {
+      color = "#437ae6ff"; 
+    } 
+    // Numbers
+    else if (!isNaN(word) && word.trim() !== "") {
+      color = "#bd93f9"; 
+    } 
+    // Symbols
+    else if (/^(\(|\)|\{|\}|\[|\]|;|,|:)$/.test(word)) {
+      color = darkMode ? "#6290d0ff" : "#4a89c6"; 
+    } 
+    // Operators 
+    else if (/^(=|\+|-|\*|\/|%|<|>|&|!|<<|>>|==|!=|<=|>=|&&|\|\||\*\|)$/.test(word)) {
+      color = "#b63388ff"; 
+    }
+
+    return <span key={i} style={{ color }}>{word}</span>;
+  });
+};
 
   const sharedStyles = {
     fontFamily: '"Fira Code", "Consolas", monospace',
     fontSize: "13px",
-    lineHeight: "21px",    
+    lineHeight: "21px", 
     paddingTop: "20px",
-    paddingBottom: "20px", 
-  }
+    paddingBottom: "20px",
+    tabSize: "4",
+    MozTabSize: "4",
+    whiteSpace: "pre",
+    wordBreak: "keep-all",
+    boxSizing: "border-box",
+  };
 
   return (
-    <div style={{ display: "flex", height: "100%", background: darkMode ? "#1f2730" : "#ffffff", position: "relative" }}>
+    <div style={{ display: "flex", height: "100%", background: darkMode ? "#1f2730" : "#ffffff", overflow: "hidden" }}>
+      {/* Line Numbers */}
       <div
         ref={lineNumbersRef}
         style={{
           ...sharedStyles,
-          width: "60px",
+          width: "70px",
           background: darkMode ? "#28313b" : "#f8fafc",
           borderRight: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`,
           color: darkMode ? "#64748b" : "#4a89c6",
@@ -90,36 +168,63 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
           userSelect: "none",
         }}
       >
-        <pre style={{ margin: 0, ...sharedStyles, paddingTop: 0 }}>{lineNumbers}</pre>
+        <pre style={{ margin: 0, ...sharedStyles, paddingTop: 0 }}>
+          {value.split("\n").map((_, i) => i + 1).join("\n")}
+        </pre>
       </div>
 
-      <textarea
-        ref={editorRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onScroll={handleScroll}
-        disabled={disabled}
-        placeholder="// write code here"
-        spellCheck={false}
-        style={{
-          ...sharedStyles,
-          flex: 1,
-          paddingLeft: "24px",
-          paddingRight: "20px",
-          resize: "none",
-          border: "none",
-          outline: "none",
-          background: "transparent",
-          color: darkMode ? "#e2e8f0" : "#0f4687",
-          overflowY: "auto",
-          whiteSpace: "pre",
-          overflowX: "auto",
-        }}
-      />
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        {/* Highlight Layer */}
+        <div
+          ref={highlightRef}
+          style={{
+            ...sharedStyles,
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            paddingLeft: "24px",
+            paddingRight: "20px",
+            paddingBottom: "61px",
+            pointerEvents: "none",
+            overflow: "hidden",
+            color: "transparent",
+            backgroundColor: "transparent",
+          }}
+        >
+          {renderHighlightedCode()}
+        </div>
+
+        {/* Input Layer */}
+        <textarea
+          ref={editorRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onScroll={handleScroll}
+          disabled={disabled}
+          spellCheck={false}
+          style={{
+            ...sharedStyles,
+            width: "100%",
+            height: "100%",
+            paddingLeft: "24px",
+            background: "transparent",
+            color: "transparent", 
+            caretColor: darkMode ? "#ffffff" : "#0f4687", 
+            resize: "none",
+            border: "none",
+            outline: "none",
+            overflow: "auto",
+            position: "relative",
+            zIndex: 1,
+          }}
+        />
+      </div>
     </div>
-  )
-}
+  );
+};
 
 // -------------------- Parsing Output --------------------
 const parseTokenOutput = (output) => {
