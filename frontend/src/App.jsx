@@ -4,20 +4,104 @@ import { useState, useRef, useCallback, useEffect } from "react"
 
 const API_URL = "http://localhost:3001"
 
+// -------------------- Utilities --------------------
 const runLexicalAnalysis = async (code) => {
   const response = await fetch(`${API_URL}/lexical`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code }),
   })
-
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.error || "Analysis failed")
   }
-
   return response.json()
 }
+
+// -------------------- Home Page Component --------------------
+const HomePage = ({ setView, darkMode }) => {
+  const btnBase = {
+    padding: "16px 32px",
+    fontSize: "14px",
+    fontWeight: "700",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    textTransform: "uppercase",
+    width: "220px",
+    border: "none",
+    boxShadow: "0 4px 15px rgba(0,0,0,0.3)"
+  };
+
+  return (
+    <div style={{ 
+      height: "100vh", 
+      width: "100vw", 
+      position: "relative", 
+      overflow: "hidden",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      background: darkMode ? "#1f2730" : "#6f38e5" 
+    }}>
+      <img
+        src="/HomeBg.gif"
+        alt="Background"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          zIndex: 0,
+          filter: "brightness(0.8)",
+          pointerEvents: "none"
+        }}
+      />
+
+      {/* Content Overlay - Added transform to nudge content up for visual centering */}
+      <div style={{ 
+        zIndex: 10, 
+        textAlign: "center", 
+        color: "#ffffff", 
+        position: "relative",
+        transform: "translateY(-40px)" // Moves contents up slightly
+      }}>
+        <img src="Cnack_nobg.png" alt="Logo" style={{ height: "120px", marginBottom: "20px" }} />
+        <h1 style={{ fontSize: "48px", margin: "0 0 10px 0", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
+          Cnack Mini Compiler
+        </h1>
+        <p style={{ fontSize: "18px", opacity: 0.9, marginBottom: "40px", fontWeight: "500" }}>
+          An environment for lexical and syntax analysis of Cnack language.
+        </p>
+        
+        <div style={{ display: "flex", gap: "20px", justifyContent: "center" }}>
+          <button 
+            onClick={() => setView("lexical")}
+            style={{ ...btnBase, background: "#ffffff", color: "#0f4687" }}
+            onMouseEnter={(e) => e.target.style.transform = "translateY(-3px)"}
+            onMouseLeave={(e) => e.target.style.transform = "translateY(0)"}
+          >
+            Lexical Analyzer
+          </button>
+          <button 
+            style={{ 
+              ...btnBase, 
+              background: "rgba(255,255,255,0.1)", 
+              color: "#ffffff", 
+              border: "2px solid #ffffff", 
+              opacity: 0.6, 
+              cursor: "not-allowed" 
+            }}
+          >
+            Syntax Analyzer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // -------------------- Code Editor Component --------------------
 const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
@@ -79,7 +163,7 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
   return words.map((word, i) => {
     if (!word) return null;
     
-    let color = darkMode ? "#e2e8f0" : "#0f4687"; // Default text
+    let color = darkMode ? "#e2e8f0" : "#0f4687"; 
 
     if (word.startsWith('"') && word.endsWith('"')) {
       const stringColor = "#80a6c0ff";
@@ -482,6 +566,7 @@ const Editor = ({ code, setCode, onRun, onClear, loading, darkMode }) => {
 
 // -------------------- Main App --------------------
 const App = () => {
+  const [view, setView] = useState("home"); 
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("theme")
     return saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -506,6 +591,10 @@ const App = () => {
     finally { setLoading(false) }
   }
 
+  if (view === "home") {
+    return <HomePage setView={setView} darkMode={darkMode} />;
+  }
+
   return (
     <div style={{
       display: "flex", flexDirection: "column", width: "100vw", height: "100vh",
@@ -517,11 +606,27 @@ const App = () => {
         borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`,
         display: "flex", justifyContent: "space-between", alignItems: "center"
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <img src="Cnack_nobg.png" alt="Logo" style={{ height: "45px" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}> {/* Reduced gap */}
+          {/* Back Button - Scaled down and padding reduced */}
+          <button 
+            onClick={() => setView("home")}
+            style={{ 
+              background: "none", 
+              border: "none", 
+              cursor: "pointer", 
+              fontSize: "16px", // Reduced size
+              color: darkMode ? "#fff" : "#0f4687", 
+              padding: "4px", // Minimal padding
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            ←
+          </button>
+          <img src="Cnack_nobg.png" alt="Logo" style={{ height: "40px" }} /> {/* Slightly smaller logo */}
           <h1 style={{ margin: 0, fontSize: "18px", color: darkMode ? "#f8fafc" : "#0f4687" }}>Cnack Mini Compiler</h1>
           
-          {/* Toggle Switch */}
           <div 
             onClick={() => setDarkMode(!darkMode)}
             style={{
