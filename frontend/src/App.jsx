@@ -18,6 +18,21 @@ const runLexicalAnalysis = async (code) => {
   return response.json()
 }
 
+const runSyntaxAnalysis = async (code) => {
+  const response = await fetch(`${API_URL}/syntax`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    // Return error output if available (e.g. syntax errors from parser)
+    if (error.output) return error;
+    throw new Error(error.error || "Analysis failed")
+  }
+  return response.json()
+}
+
 // -------------------- Home Page Component --------------------
 const HomePage = ({ setView, darkMode }) => {
   const btnBase = {
@@ -60,13 +75,12 @@ const HomePage = ({ setView, darkMode }) => {
         }}
       />
 
-      {/* Content Overlay - Added transform to nudge content up for visual centering */}
       <div style={{ 
         zIndex: 10, 
         textAlign: "center", 
         color: "#ffffff", 
         position: "relative",
-        transform: "translateY(-40px)" // Moves contents up slightly
+        transform: "translateY(-40px)" 
       }}>
         <img src="Cnack_nobg.png" alt="Logo" style={{ height: "120px", marginBottom: "20px" }} />
         <h1 style={{ fontSize: "48px", margin: "0 0 10px 0", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
@@ -85,15 +99,12 @@ const HomePage = ({ setView, darkMode }) => {
           >
             Lexical Analyzer
           </button>
+          
           <button 
-            style={{ 
-              ...btnBase, 
-              background: "rgba(255,255,255,0.1)", 
-              color: "#ffffff", 
-              border: "2px solid #ffffff", 
-              opacity: 0.6, 
-              cursor: "not-allowed" 
-            }}
+            onClick={() => setView("syntax")}
+            style={{ ...btnBase, background: "#ffffff", color: "#b63388" }} 
+            onMouseEnter={(e) => e.target.style.transform = "translateY(-3px)"}
+            onMouseLeave={(e) => e.target.style.transform = "translateY(0)"}
           >
             Syntax Analyzer
           </button>
@@ -148,7 +159,6 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
         indent += "    ";
       }
 
-
       const newValue = value.substring(0, start) + "\n" + indent + value.substring(end);
       onChange(newValue);
       setTimeout(() => {
@@ -158,69 +168,38 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
   };
 
   const renderHighlightedCode = () => {
-  const words = value.split(/(\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^\\"])*"|\s+|<<|>>|==|!=|<=|>=|&&|\|\||\*\||[()\[\]{};,:]|[-+*/%<>&!|=])/);
-  
-  return words.map((word, i) => {
-    if (!word) return null;
+    const words = value.split(/(\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^\\"])*"|\s+|<<|>>|==|!=|<=|>=|&&|\|\||\*\||[()\[\]{};,:]|[-+*/%<>&!|=])/);
     
-    let color = darkMode ? "#e2e8f0" : "#0f4687"; 
-
-    if (word.startsWith('"') && word.endsWith('"')) {
-      const stringColor = "#80a6c0ff";
-      const parts = word.split(/(\{.*?\})/g);
+    return words.map((word, i) => {
+      if (!word) return null;
       
-      return (
-        <span key={i} style={{ color: stringColor }}>
-          {parts.map((part, j) => {
-            if (part.startsWith('{') && part.endsWith('}')) {
-              const content = part.slice(1, -1);
-              const subTokens = content.split(/(\*|\||[-+/%<>&!=])/g);
-              
-              return (
-                <span key={j}>
-                  <span style={{ color: darkMode ? "#94a3b8" : "#4a89c6" }}>{'{'}</span>
-                  {subTokens.map((st, k) => {
-                    let stColor = darkMode ? "#e2e8f0" : "#0f4687";
-                    // Color symbols/operators inside the braces (like the * in *scorePtr)
-                    if (/^([-+*/%<>&!|=])$/.test(st)) {
-                      stColor = "#b63388ff"; 
-                    }
-                    return <span key={k} style={{ color: stColor }}>{st}</span>;
-                  })}
-                  <span style={{ color: darkMode ? "#94a3b8" : "#4a89c6" }}>{'}'}</span>
-                </span>
-              );
-            }
-            return part;
-          })}
-        </span>
-      );
-    }
+      let color = darkMode ? "#e2e8f0" : "#0f4687"; 
 
-    // Comments
-    if (word.startsWith("//") || word.startsWith("/*")) {
-      color = "#6272a4"; 
-    } 
-    // Keywords
-    else if (/^(int|string|float|char|double|boolean|void|if|else|elif|switch|case|default|assign|otherwise|while|for|do while|break|continue|return|execute|exit|const|ask|display|true|false|fetch|when)$/.test(word)) {
-      color = "#437ae6ff"; 
-    } 
-    // Numbers
-    else if (!isNaN(word) && word.trim() !== "") {
-      color = "#bd93f9"; 
-    } 
-    // Symbols
-    else if (/^(\(|\)|\{|\}|\[|\]|;|,|:)$/.test(word)) {
-      color = darkMode ? "#6290d0ff" : "#4a89c6"; 
-    } 
-    // Operators 
-    else if (/^(=|\+|-|\*|\/|%|<|>|&|!|<<|>>|==|!=|<=|>=|&&|\|\||\*\|)$/.test(word)) {
-      color = "#b63388ff"; 
-    }
+      if (word.startsWith('"') && word.endsWith('"')) {
+        return <span key={i} style={{ color: "#80a6c0ff" }}>{word}</span>;
+      }
+      if (word.startsWith("//") || word.startsWith("/*")) {
+        color = "#6272a4"; 
+      } 
+      else if (/^(int|string|float|char|double|boolean|void|if|else|elif|switch|case|default|assign|otherwise|while|for|do|break|continue|return|execute|exit|const|ask|display|true|false|fetch|when|fn)$/.test(word)) {
+        color = "#437ae6ff"; 
+      } 
+      else if (/^(auto_ref)$/.test(word)) {
+        color = "#e6c643"; // Highlight auto_ref specially
+      }
+      else if (!isNaN(word) && word.trim() !== "") {
+        color = "#bd93f9"; 
+      } 
+      else if (/^(\(|\)|\{|\}|\[|\]|;|,|:)$/.test(word)) {
+        color = darkMode ? "#6290d0ff" : "#4a89c6"; 
+      } 
+      else if (/^(=|\+|-|\*|\/|%|<|>|&|!|<<|>>|==|!=|<=|>=|&&|\|\||\*\|)$/.test(word)) {
+        color = "#b63388ff"; 
+      }
 
-    return <span key={i} style={{ color }}>{word}</span>;
-  });
-};
+      return <span key={i} style={{ color }}>{word}</span>;
+    });
+  };
 
   const sharedStyles = {
     fontFamily: '"Fira Code", "Consolas", monospace',
@@ -237,7 +216,6 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
 
   return (
     <div style={{ display: "flex", height: "100%", background: darkMode ? "#1f2730" : "#ffffff", overflow: "hidden" }}>
-      {/* Line Numbers */}
       <div
         ref={lineNumbersRef}
         style={{
@@ -258,29 +236,18 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
       </div>
 
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-        {/* Highlight Layer */}
         <div
           ref={highlightRef}
           style={{
             ...sharedStyles,
             position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            paddingLeft: "24px",
-            paddingRight: "20px",
-            paddingBottom: "61px",
-            pointerEvents: "none",
-            overflow: "hidden",
-            color: "transparent",
-            backgroundColor: "transparent",
+            top: 0, left: 0, right: 0, bottom: 0,
+            paddingLeft: "24px", paddingRight: "20px", paddingBottom: "61px",
+            pointerEvents: "none", overflow: "hidden", color: "transparent", backgroundColor: "transparent",
           }}
         >
           {renderHighlightedCode()}
         </div>
-
-        {/* Input Layer */}
         <textarea
           ref={editorRef}
           value={value}
@@ -291,18 +258,11 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
           spellCheck={false}
           style={{
             ...sharedStyles,
-            width: "100%",
-            height: "100%",
-            paddingLeft: "24px",
-            background: "transparent",
-            color: "transparent", 
+            width: "100%", height: "100%", paddingLeft: "24px",
+            background: "transparent", color: "transparent", 
             caretColor: darkMode ? "#ffffff" : "#0f4687", 
-            resize: "none",
-            border: "none",
-            outline: "none",
-            overflow: "auto",
-            position: "relative",
-            zIndex: 1,
+            resize: "none", border: "none", outline: "none",
+            overflow: "auto", position: "relative", zIndex: 1,
           }}
         />
       </div>
@@ -310,36 +270,12 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
   );
 };
 
-// -------------------- Parsing Output --------------------
-const parseTokenOutput = (output) => {
-  const lines = output.split("\n");
-  const tokens = []
-  let startParsing = false
-
-  for (const line of lines) {
-    if (line.includes("-------|")) {
-      startParsing = true
-      continue
-    }
-    if (startParsing && line.trim()) {
-      const first = line.indexOf("|")
-      const second = line.indexOf("|", first + 1)
-      if (first !== -1 && second !== -1) {
-        const lineNum = line.slice(0, first).trim()
-        const type = line.slice(first + 1, second).trim()
-        const lexeme = line.slice(second + 1).trim()
-        tokens.push({ line: lineNum, type, lexeme })
-      }
-    }
-  }
-  return tokens
-}
-
 // -------------------- Output Component --------------------
-const Output = ({ output, error, loading, darkMode }) => {
+const Output = ({ output, error, loading, darkMode, view }) => {
   const [filterLine, setFilterLine] = useState("");
 
   const parseTokenOutput = (out) => {
+    if (!out) return [];
     const lines = out.split("\n");
     const tokens = []
     let startParsing = false
@@ -359,108 +295,58 @@ const Output = ({ output, error, loading, darkMode }) => {
     return tokens
   }
 
-  let tokens = output ? parseTokenOutput(output) : []
-
-  if (filterLine.trim() !== "") {
-    tokens = tokens.filter(t => t.line === filterLine.trim());
-  }
+  const tokens = output ? parseTokenOutput(output) : [];
+  const filteredTokens = filterLine.trim() !== "" 
+      ? tokens.filter(t => t.line === filterLine.trim()) 
+      : tokens;
 
   const handleDownload = () => {
     if (!output) return
     let content = output
-    if (!output.includes("END OF ANALYSIS")) {
-      content = output + "\n================================================\n     END OF ANALYSIS\n================================================\n"
-    }
     const blob = new Blob([content], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'lexical_analysis_output.txt'
+    link.download = `${view}_analysis_output.txt`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }
 
+  const headerColor = view === "lexical" ? "#0f4687" : "#b63388"; 
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: darkMode ? "#1f2730" : "#ffffff" }}>
+      {/* Header */}
       <div style={{
-        height: "60px", padding: "0 24px", background: darkMode ? "#0f4687" : "rgba(15, 69, 135, 1)",
+        height: "60px", padding: "0 24px", background: darkMode ? headerColor : headerColor,
         borderBottom: `1px solid ${darkMode ? "#334155" : "#c7d2fe"}`,
         color: "#ffffff", fontWeight: "600", fontSize: "13px", textTransform: "uppercase",
         display: "flex", justifyContent: "space-between", alignItems: "center",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <span>Lexical Analysis</span>
+          <span>{view === "lexical" ? "Lexical Analysis" : "Syntax Analysis"}</span>
           
-          {/* LINE FILTER INPUT */}
           <div style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            background: darkMode ? "#275893" : "rgba(255,255,255,0.1)", 
-            borderRadius: "4px", 
-            padding: "2px 10px", 
-            border: darkMode ? "1px solid #4a89c6" : "1px solid rgba(255,255,255,0.2)",
-            marginBottom: "-1px",
-            height: "16px" 
+            display: "flex", alignItems: "center", background: darkMode ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.1)", 
+            borderRadius: "4px", padding: "2px 10px", border: "1px solid rgba(255,255,255,0.2)",
+            marginBottom: "-1px", height: "16px" 
           }}>
-            <span style={{ 
-              fontSize: "10px", 
-              color: "#ffffff", 
-              marginRight: "4px",
-              display: "flex",
-              alignItems: "center"
-            }}>LINE:</span>
-            
-            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              
-              {!filterLine && (
-                <span style={{
-                  position: "absolute",
-                  left: "0",
-                  width: "100%",
-                  textAlign: "center",
-                  color: "#ffffff",
-                  fontSize: "10px",
-                  pointerEvents: "none",
-                  opacity: 0.9
-                }}>
-                  All
-                </span>
-              )}
-              <input 
-                type="text" 
-                value={filterLine}
-                onChange={(e) => setFilterLine(e.target.value)}
-                style={{
-                  width: "40px",
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: "#ffffff",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  textAlign: "center",
-                  lineHeight: "1",
-                  padding: 0,
-                  margin: 0
-                }}
-              />
+            <span style={{ fontSize: "10px", color: "#ffffff", marginRight: "4px" }}>LINE:</span>
+            <div style={{ position: "relative" }}>
+                {!filterLine && <span style={{ position: "absolute", left:0, width: "100%", textAlign: "center", fontSize:"10px", pointerEvents:"none", opacity:0.8 }}>All</span>}
+                <input type="text" value={filterLine} onChange={(e) => setFilterLine(e.target.value)}
+                style={{ width: "40px", background: "transparent", border: "none", outline: "none", color: "#ffffff", fontSize: "12px", textAlign: "center", margin: 0 }} />
             </div>
           </div>
         </div>
 
         {output && !loading && (
-          <button
-            onClick={handleDownload}
-            style={{
-              padding: "6px 16px", background: "#ffffff", color: "#0f4687", border: "1px solid #c7d2fe",
-              borderRadius: "6px", fontSize: "11px", fontWeight: "600", cursor: "pointer",
-              transition: "all 0.15s", display: "flex", alignItems: "center", gap: "6px", textTransform: "uppercase",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#c7d2fe"; e.currentTarget.style.color = "#0e5398" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.color = "#0f4687" }}
-          >
+          <button onClick={handleDownload} style={{
+              padding: "6px 16px", background: "#ffffff", color: headerColor, border: "none",
+              borderRadius: "6px", fontSize: "11px", fontWeight: "600", cursor: "pointer", textTransform: "uppercase"
+            }}>
             Download
           </button>
         )}
@@ -472,13 +358,15 @@ const Output = ({ output, error, loading, darkMode }) => {
             <strong>Error</strong>: {error}
           </div>
         ) : loading ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#4a89c6" }}>Analyzing...</div>
-        ) : tokens.length > 0 ? (
+          <div style={{ textAlign: "center", padding: "40px", color: darkMode ? "#94a3b8" : "#4a89c6" }}>Running Analysis...</div>
+        ) : filteredTokens.length > 0 ? (
           <div style={{ background: darkMode ? "#28313b" : "#f8fafc", borderRadius: "8px", overflow: "hidden", border: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}` }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "16px 20px", background: "#4a89c6", fontWeight: "600", fontSize: "12px", color: "#ffffff", textAlign: "center" }}>
-              <div>Line</div><div>Type</div><div>Lexeme</div>
+              <div>LINE</div>
+              <div>{view === "lexical" ? "TOKEN TYPE" : "GRAMMAR RULE"}</div>
+              <div>{view === "lexical" ? "LEXEME" : "SYNTAX"}</div>
             </div>
-            {tokens.map((t, i) => (
+            {filteredTokens.map((t, i) => (
               <div key={i} style={{ 
                 display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "12px 20px", 
                 background: i % 2 === 0 ? (darkMode ? "#1f2730" : "#ffffff") : (darkMode ? "#28313b" : "#f8fafc"), 
@@ -490,8 +378,8 @@ const Output = ({ output, error, loading, darkMode }) => {
             ))}
           </div>
         ) : (
-          <div style={{ textAlign: "center", padding: "40px", color: "#4a89c6", fontSize: "13px" }}>
-            {filterLine ? `No tokens found for line ${filterLine}.` : "No analysis yet."}
+          <div style={{ textAlign: "center", padding: "40px", color: darkMode ? "#64748b" : "#94a3b8", fontSize: "13px" }}>
+            {filterLine ? `No data found for line ${filterLine}.` : "No analysis results generated yet."}
           </div>
         )}
       </div>
@@ -499,39 +387,26 @@ const Output = ({ output, error, loading, darkMode }) => {
   )
 }
 
-// -------------------- Editor Component --------------------
-const Editor = ({ code, setCode, onRun, onClear, loading, darkMode }) => {
+// -------------------- Editor Container --------------------
+const Editor = ({ code, setCode, onRun, onClear, loading, darkMode, view }) => {
+  const btnColor = view === "lexical" ? "#0f4687" : "#b63388";
+  
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <div
         style={{
-          height: "60px",
-          padding: "0 24px",
-          background: darkMode ? "#0f4687" : "rgba(15, 69, 135, 1)",
+          height: "60px", padding: "0 24px", background: darkMode ? btnColor : btnColor,
           borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
         }}
       >
-        <div style={{ color: "#ffffff", fontWeight: "600", fontSize: "13px", textTransform: "uppercase" }}>Code Input</div>
+        <div style={{ color: "#ffffff", fontWeight: "600", fontSize: "13px", textTransform: "uppercase" }}>Cnack Editor</div>
         <button
-          onClick={onClear}
-          disabled={loading}
+          onClick={onClear} disabled={loading}
           style={{
-            padding: "6px 16px",
-            background: "#ffffff",
-            borderRadius: "6px",
-            color: "#0f4687",
-            border: "1px solid #c7d2fe",
-            cursor: loading ? "not-allowed" : "pointer",
-            fontSize: "11px",
-            fontWeight: "500",
-            transition: "all 0.15s",
-            textTransform: "uppercase"
+            padding: "6px 16px", background: "#ffffff", borderRadius: "6px", color: btnColor,
+            border: "none", cursor: loading ? "not-allowed" : "pointer", fontSize: "11px", fontWeight: "600", textTransform: "uppercase"
           }}
-          onMouseEnter={(e) => { if (!loading) { e.target.style.background = "#c7d2fe"; e.target.style.color = "#0e5398" } }}
-          onMouseLeave={(e) => { if (!loading) { e.target.style.background = "#ffffff"; e.target.style.color = "#0f4687" } }}
         >
           CLEAR
         </button>
@@ -543,21 +418,14 @@ const Editor = ({ code, setCode, onRun, onClear, loading, darkMode }) => {
 
       <div style={{ padding: "16px 24px", borderTop: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`, background: darkMode ? "#1f2730" : "#ffffff" }}>
         <button
-          onClick={onRun}
-          disabled={loading}
+          onClick={onRun} disabled={loading}
           style={{
-            width: "100%",
-            padding: "12px",
-            background: loading ? "#4a89c6" : "#0f4687",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "6px",
-            fontWeight: "600",
-            fontSize: "13px",
+            width: "100%", padding: "12px", background: loading ? "#94a3b8" : btnColor,
+            color: "#ffffff", border: "none", borderRadius: "6px", fontWeight: "600", fontSize: "13px",
             cursor: loading ? "not-allowed" : "pointer",
           }}
         >
-          {loading ? "Analyzing..." : "Analyze Code"}
+          {loading ? "Analyzing..." : `Run ${view === "lexical" ? "Lexical" : "Syntax"} Analysis`}
         </button>
       </div>
     </div>
@@ -566,7 +434,7 @@ const Editor = ({ code, setCode, onRun, onClear, loading, darkMode }) => {
 
 // -------------------- Main App --------------------
 const App = () => {
-  const [view, setView] = useState("home"); 
+  const [view, setView] = useState("home"); // "home", "lexical", "syntax"
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("theme")
     return saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -576,24 +444,66 @@ const App = () => {
     localStorage.setItem("theme", darkMode ? "dark" : "light")
   }, [darkMode])
 
-  const [code, setCode] = useState("// Cnack Mini Compiler\n execute() {\n    int x = 10;\n    exit();\n}")
+  // Default code snippet
+  const [code, setCode] = useState(`execute() {
+    int x = 10;
+    string msg = "Hello";
+    
+    assign (grade) {
+        when x > 5: 1;
+        otherwise: 0;
+    }
+
+    display(msg);
+    exit();
+}`)
   const [output, setOutput] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
+  // Reset output when switching views
+  useEffect(() => {
+    setOutput("");
+    setError("");
+  }, [view]);
+
   const handleRun = async () => {
     if (!code.trim()) return setError("Please enter code to analyze.")
     setLoading(true); setError(""); setOutput("")
+    
     try {
-      const result = await runLexicalAnalysis(code)
-      setOutput(result.output)
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
+      let result;
+      if (view === "lexical") {
+        result = await runLexicalAnalysis(code)
+      } else if (view === "syntax") {
+        result = await runSyntaxAnalysis(code)
+      }
+      
+      if (result.success === false) {
+        // Syntax errors often come in result.output
+        if (result.output) {
+            // We set output anyway so the user sees the error table/text
+            setOutput(result.output);
+            setError(result.output.split('\n')[0]); // Just grab first line for the error box
+        } else {
+            setError("Analysis failed. Check your code.");
+        }
+      } else {
+        setOutput(result.output)
+      }
+
+    } catch (err) { 
+      setError(err.message) 
+    } finally { 
+      setLoading(false) 
+    }
   }
 
   if (view === "home") {
     return <HomePage setView={setView} darkMode={darkMode} />;
   }
+
+  const primaryColor = view === "lexical" ? "#0f4687" : "#b63388";
 
   return (
     <div style={{
@@ -606,31 +516,24 @@ const App = () => {
         borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`,
         display: "flex", justifyContent: "space-between", alignItems: "center"
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}> {/* Reduced gap */}
-          {/* Back Button - Scaled down and padding reduced */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}> 
           <button 
             onClick={() => setView("home")}
             style={{ 
-              background: "none", 
-              border: "none", 
-              cursor: "pointer", 
-              fontSize: "16px", // Reduced size
-              color: darkMode ? "#fff" : "#0f4687", 
-              padding: "4px", // Minimal padding
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
+              background: "none", border: "none", cursor: "pointer", fontSize: "16px",
+              color: darkMode ? "#fff" : primaryColor, padding: "4px", display: "flex", alignItems: "center"
             }}
           >
             ←
           </button>
-          <img src="Cnack_nobg.png" alt="Logo" style={{ height: "40px" }} /> {/* Slightly smaller logo */}
-          <h1 style={{ margin: 0, fontSize: "18px", color: darkMode ? "#f8fafc" : "#0f4687" }}>Cnack Mini Compiler</h1>
+          <img src="Cnack_nobg.png" alt="Logo" style={{ height: "40px" }} />
+          <h1 style={{ margin: 0, fontSize: "18px", color: darkMode ? "#f8fafc" : primaryColor }}>
+             Cnack Mini Compiler
+          </h1>
           
-          <div 
-            onClick={() => setDarkMode(!darkMode)}
+          <div onClick={() => setDarkMode(!darkMode)}
             style={{
-              marginLeft: "12px", width: "42px", height: "22px", background: darkMode ? "#0f4687" : "#cbd5e1",
+              marginLeft: "12px", width: "42px", height: "22px", background: darkMode ? primaryColor : "#cbd5e1",
               borderRadius: "20px", cursor: "pointer", display: "flex", alignItems: "center", padding: "2px", transition: "0.3s"
             }}
           >
@@ -643,15 +546,17 @@ const App = () => {
             </div>
           </div>
         </div>
-        <div style={{ fontSize: "12px", color: darkMode ? "#94a3b8" : "#4a89c6" }}>Lexical Analyzer</div>
+        <div style={{ fontSize: "12px", fontWeight: "600", color: darkMode ? "#94a3b8" : primaryColor, textTransform: "uppercase" }}>
+          {view === "lexical" ? "Lexical Analyzer Mode" : "Syntax Analyzer Mode"}
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", flex: 1, gap: "16px", padding: "16px", overflow: "hidden" }}>
         <div style={{ background: darkMode ? "#1f2730" : "#ffffff", borderRadius: "8px", border: `1px solid ${darkMode ? "#334155" : "#b9babdff"}`, overflow: "hidden" }}>
-          <Editor code={code} setCode={setCode} onRun={handleRun} onClear={() => setCode("")} loading={loading} darkMode={darkMode} />
+          <Editor code={code} setCode={setCode} onRun={handleRun} onClear={() => setCode("")} loading={loading} darkMode={darkMode} view={view} />
         </div>
         <div style={{ background: darkMode ? "#1f2730" : "#ffffff", borderRadius: "8px", border: `1px solid ${darkMode ? "#334155" : "#b9babdff"}`, overflow: "hidden" }}>
-          <Output output={output} error={error} loading={loading} darkMode={darkMode} />
+          <Output output={output} error={error} loading={loading} darkMode={darkMode} view={view} />
         </div>
       </div>
     </div>
