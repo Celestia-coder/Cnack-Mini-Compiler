@@ -8,73 +8,99 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 
 const app = express();
-const PORT = 3001;
+const PORT = 3001; 
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.text());
 
-// Path to lexer executable
-const LEXER_PATH = path.join(__dirname, 'bin', 'lexer.exe');
+// -----------------------------
+//  PATHS TO EXECUTABLES
+// -----------------------------
+const BIN_DIR = path.join(__dirname, 'bin');
+const LEXER_PATH = path.join(BIN_DIR, 'lexer.exe');
+const PARSER_PATH = path.join(BIN_DIR, 'parser.exe'); // NEW: Path for Syntax Analyzer
 
 // Root endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'Lexical Analyzer API is running!' });
+  res.json({ message: 'Cnack Compiler API is running!' });
 });
 
 // -----------------------------
-//  LEXICAL ANALYSIS ENDPOINT
+//  1. LEXICAL ANALYSIS ENDPOINT
 // -----------------------------
 app.post('/lexical', (req, res) => {
+  handleProcess(req, res, LEXER_PATH, "Lexer");
+});
+
+// -----------------------------
+//  2. SYNTAX ANALYSIS ENDPOINT (NEW)
+// -----------------------------
+app.post('/syntax', (req, res) => {
+  handleProcess(req, res, PARSER_PATH, "Parser");
+});
+
+// -----------------------------
+//  HELPER FUNCTION
+// -----------------------------
+// Reusable function to handle both Lexer and Parser processes
+function handleProcess(req, res, executablePath, processName) {
   const { code } = req.body;
 
-  // Validate user input
+  // Validate user input 
   if (!code || code.trim() === '') {
     return res.status(400).json({
       error: 'Empty code: Please enter some code to analyze.'
     });
   }
 
-  // Ensure lexer exists
-  if (!fs.existsSync(LEXER_PATH)) {
+  // Ensure executable exists 
+  if (!fs.existsSync(executablePath)) {
     return res.status(500).json({
-      error: `lexer.exe NOT FOUND at: ${LEXER_PATH}.
-Place your compiled lexer.exe inside the /bin folder.`
+      error: `${processName} executable NOT FOUND at: ${executablePath}.\nPlease place the compiled .exe inside the /bin folder.`
     });
   }
 
-  // Spawn lexer.exe
-  const lexer = spawn(LEXER_PATH);
+  // Spawn the process (Lexer or Parser) 
+  const child = spawn(executablePath);
 
   let output = '';
   let errorOutput = '';
 
-  lexer.stdout.on('data', (data) => {
+  // Capture Standard Output
+  child.stdout.on('data', (data) => {
     output += data.toString();
   });
 
-  lexer.stderr.on('data', (data) => {
+  // Capture Standard Error
+  child.stderr.on('data', (data) => {
     errorOutput += data.toString();
   });
 
-  lexer.on('close', () => {
-    if (errorOutput) {
-      return res.status(500).json({
-        error: `Lexer error: ${errorOutput}`
-      });
+  // Handle Process Closure
+  child.on('close', (code) => {
+    // If the process had stderr output, treat it as an error message
+    // Note: Some compilers print warnings to stderr, so you might want to adjust this logic depending on your C code's behavior.
+    if (errorOutput && code !== 0) { 
+        return res.json({ 
+            success: false, 
+            output: errorOutput, // Send the error message from C code back to frontend
+            type: 'error'
+        });
     }
 
     return res.json({
       success: true,
-      output: output || 'No output generated.'
+      output: output || 'No output generated.',
+      type: 'success'
     });
   });
 
-  // Write code to STDIN
-  lexer.stdin.write(code);
-  lexer.stdin.end();
-});
+  // Write code to STDIN of the C program 
+  child.stdin.write(code);
+  child.stdin.end();
+}
 
 // -----------------------------
 //  ERROR HANDLER
@@ -90,7 +116,9 @@ app.use((err, req, res, next) => {
 //  START SERVER
 // -----------------------------
 app.listen(PORT, () => {
-  console.log(`\n🚀 Lexical Analyzer API running at: http://localhost:${PORT}`);
-  console.log(`📁 Expecting lexer at: ${LEXER_PATH}`);
+  console.log(`\n🚀 Cnack Compiler API running at: http://localhost:${PORT}`);
+  console.log(`📁 Bin Directory: ${BIN_DIR}`);
+  console.log(`   Expecting Lexer at:  ${LEXER_PATH}`);
+  console.log(`   Expecting Parser at: ${PARSER_PATH}`);
   console.log(`✅ Ready to accept requests!\n`);
 });

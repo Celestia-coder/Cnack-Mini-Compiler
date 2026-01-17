@@ -274,6 +274,7 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
 const Output = ({ output, error, loading, darkMode, view }) => {
   const [filterLine, setFilterLine] = useState("");
 
+  // Helper: Parses the "Lexical" output into a list of tokens for the table
   const parseTokenOutput = (out) => {
     if (!out) return [];
     const lines = out.split("\n");
@@ -295,15 +296,59 @@ const Output = ({ output, error, loading, darkMode, view }) => {
     return tokens
   }
 
-  const tokens = output ? parseTokenOutput(output) : [];
-  const filteredTokens = filterLine.trim() !== "" 
-      ? tokens.filter(t => t.line === filterLine.trim()) 
-      : tokens;
+  // Logic: Prepare data based on the View
+  let contentToRender = null;
+
+  if (view === "lexical") {
+    // --- LEXICAL VIEW (Table) ---
+    const tokens = output ? parseTokenOutput(output) : [];
+    const filteredTokens = filterLine.trim() !== "" 
+        ? tokens.filter(t => t.line === filterLine.trim()) 
+        : tokens;
+
+    if (filteredTokens.length > 0) {
+      contentToRender = (
+        <div style={{ background: darkMode ? "#28313b" : "#f8fafc", borderRadius: "8px", overflow: "hidden", border: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "16px 20px", background: "#4a89c6", fontWeight: "600", fontSize: "12px", color: "#ffffff", textAlign: "center" }}>
+            <div>LINE</div><div>TOKEN TYPE</div><div>LEXEME</div>
+          </div>
+          {filteredTokens.map((t, i) => (
+            <div key={i} style={{ 
+              display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "12px 20px", 
+              background: i % 2 === 0 ? (darkMode ? "#1f2730" : "#ffffff") : (darkMode ? "#28313b" : "#f8fafc"), 
+              borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`, 
+              fontSize: "13px", textAlign: "center", color: darkMode ? "#cbd5e1" : "#0f4687" 
+            }}>
+              <div>{t.line}</div><div>{t.type}</div><div>{t.lexeme}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+  } else {
+    // --- SYNTAX VIEW (Simple Text) ---
+    if (output) {
+      contentToRender = (
+        <div style={{ 
+          background: darkMode ? "#0d1117" : "#1e1e1e", // Terminal-like background
+          color: "#d4d4d4",
+          padding: "20px", 
+          borderRadius: "8px", 
+          fontFamily: '"Fira Code", monospace',
+          fontSize: "13px",
+          lineHeight: "1.6",
+          whiteSpace: "pre-wrap",
+          border: `1px solid ${darkMode ? "#334155" : "#444"}`
+        }}>
+          {output}
+        </div>
+      );
+    }
+  }
 
   const handleDownload = () => {
     if (!output) return
-    let content = output
-    const blob = new Blob([content], { type: 'text/plain' })
+    const blob = new Blob([output], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -320,7 +365,7 @@ const Output = ({ output, error, loading, darkMode, view }) => {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: darkMode ? "#1f2730" : "#ffffff" }}>
       {/* Header */}
       <div style={{
-        height: "60px", padding: "0 24px", background: darkMode ? headerColor : headerColor,
+        height: "60px", padding: "0 24px", background: headerColor,
         borderBottom: `1px solid ${darkMode ? "#334155" : "#c7d2fe"}`,
         color: "#ffffff", fontWeight: "600", fontSize: "13px", textTransform: "uppercase",
         display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -328,18 +373,21 @@ const Output = ({ output, error, loading, darkMode, view }) => {
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           <span>{view === "lexical" ? "Lexical Analysis" : "Syntax Analysis"}</span>
           
-          <div style={{ 
-            display: "flex", alignItems: "center", background: darkMode ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.1)", 
-            borderRadius: "4px", padding: "2px 10px", border: "1px solid rgba(255,255,255,0.2)",
-            marginBottom: "-1px", height: "16px" 
-          }}>
-            <span style={{ fontSize: "10px", color: "#ffffff", marginRight: "4px" }}>LINE:</span>
-            <div style={{ position: "relative" }}>
-                {!filterLine && <span style={{ position: "absolute", left:0, width: "100%", textAlign: "center", fontSize:"10px", pointerEvents:"none", opacity:0.8 }}>All</span>}
-                <input type="text" value={filterLine} onChange={(e) => setFilterLine(e.target.value)}
-                style={{ width: "40px", background: "transparent", border: "none", outline: "none", color: "#ffffff", fontSize: "12px", textAlign: "center", margin: 0 }} />
+          {/* Only show line filter for Lexical */}
+          {view === "lexical" && (
+            <div style={{ 
+              display: "flex", alignItems: "center", background: "rgba(255,255,255,0.1)", 
+              borderRadius: "4px", padding: "2px 10px", border: "1px solid rgba(255,255,255,0.2)",
+              marginBottom: "-1px", height: "16px" 
+            }}>
+              <span style={{ fontSize: "10px", color: "#ffffff", marginRight: "4px" }}>LINE:</span>
+              <div style={{ position: "relative" }}>
+                  {!filterLine && <span style={{ position: "absolute", left:0, width: "100%", textAlign: "center", fontSize:"10px", pointerEvents:"none", opacity:0.8 }}>All</span>}
+                  <input type="text" value={filterLine} onChange={(e) => setFilterLine(e.target.value)}
+                  style={{ width: "40px", background: "transparent", border: "none", outline: "none", color: "#ffffff", fontSize: "12px", textAlign: "center", margin: 0 }} />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {output && !loading && (
@@ -352,35 +400,22 @@ const Output = ({ output, error, loading, darkMode, view }) => {
         )}
       </div>
 
+      {/* Main Content Area */}
       <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
         {error ? (
-          <div style={{ background: "rgba(248, 81, 73, 0.1)", border: "1px solid rgba(248, 81, 73, 0.3)", padding: "16px", borderRadius: "8px", color: "#d32f2f", fontSize: "13px" }}>
-            <strong>Error</strong>: {error}
+          <div style={{ background: "rgba(248, 81, 73, 0.1)", border: "1px solid rgba(248, 81, 73, 0.3)", padding: "16px", borderRadius: "8px", color: "#d32f2f", fontSize: "13px", marginBottom: "20px", whiteSpace: "pre-wrap" }}>
+            <strong>Error:</strong> {error}
           </div>
-        ) : loading ? (
+        ) : null}
+
+        {loading ? (
           <div style={{ textAlign: "center", padding: "40px", color: darkMode ? "#94a3b8" : "#4a89c6" }}>Running Analysis...</div>
-        ) : filteredTokens.length > 0 ? (
-          <div style={{ background: darkMode ? "#28313b" : "#f8fafc", borderRadius: "8px", overflow: "hidden", border: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}` }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "16px 20px", background: "#4a89c6", fontWeight: "600", fontSize: "12px", color: "#ffffff", textAlign: "center" }}>
-              <div>LINE</div>
-              <div>{view === "lexical" ? "TOKEN TYPE" : "GRAMMAR RULE"}</div>
-              <div>{view === "lexical" ? "LEXEME" : "SYNTAX"}</div>
-            </div>
-            {filteredTokens.map((t, i) => (
-              <div key={i} style={{ 
-                display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "12px 20px", 
-                background: i % 2 === 0 ? (darkMode ? "#1f2730" : "#ffffff") : (darkMode ? "#28313b" : "#f8fafc"), 
-                borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`, 
-                fontSize: "13px", textAlign: "center", color: darkMode ? "#cbd5e1" : "#0f4687" 
-              }}>
-                <div>{t.line}</div><div>{t.type}</div><div>{t.lexeme}</div>
-              </div>
-            ))}
-          </div>
         ) : (
-          <div style={{ textAlign: "center", padding: "40px", color: darkMode ? "#64748b" : "#94a3b8", fontSize: "13px" }}>
-            {filterLine ? `No data found for line ${filterLine}.` : "No analysis results generated yet."}
-          </div>
+          contentToRender || (
+            <div style={{ textAlign: "center", padding: "40px", color: darkMode ? "#64748b" : "#94a3b8", fontSize: "13px" }}>
+              {view === "lexical" && filterLine ? `No data found for line ${filterLine}.` : "No analysis results generated yet."}
+            </div>
+          )
         )}
       </div>
     </div>
