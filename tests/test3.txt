@@ -6,11 +6,11 @@ execute() {
     float *bonusPtr = auto_ref(float, 2.5);
 
     // Access the values using dereferencing
-    print("Initial Score: ");
-    print(*scorePtr);      // 15
+    display("Initial Score: ");
+    display(*scorePtr);      // 15
 
-    print("Initial Bonus: ");
-    print(*bonusPtr);      // 2.5
+    display("Initial Bonus: ");
+    display(*bonusPtr);      // 2.5
 
 
     // --- Quantum Pointer: synchronize multiple variables ---
