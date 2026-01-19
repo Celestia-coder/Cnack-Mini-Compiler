@@ -4,7 +4,7 @@
 #include <ctype.h>
 
 /* ========================================================================= */
-/* 1. LEXER & TOKEN DEFINITIONS                                              */
+/* 1. LEXER DEFINITIONS & LOGIC                                              */
 /* ========================================================================= */
 
 typedef enum {
@@ -98,7 +98,6 @@ TokenType getKeywordType(const char *str, int length) {
 void skipWhitespaceAndNewlines() {
     while (!reachedEnd()) {
         char c = currentChar();
-        // Use ctype's isspace to catch non-standard whitespace, plus standard check
         if (isspace((unsigned char)c)) {
             if (c == '\n') scanner.line_number++;
             consumeChar();
@@ -147,18 +146,16 @@ Token getNextToken() {
 
     char c = currentChar();
 
-    // Catch-all for weird non-printable characters that isspace didn't catch (like some copy-paste artifacts)
-    if (!isprint((unsigned char)c) && c != '\0') {
+    // Catch invalid characters
+    if (!isLetter(c) && !isDigit(c) && !isOperator(c) && c != '_' && c != '"' && c != '\'' && 
+        c != '(' && c != ')' && c != '{' && c != '}' && c != '[' && c != ']' && c != ',' && c != ';' && c != ':') {
         consumeChar();
-        return getNextToken(); // Skip it and try again
+        return createErrorToken("Invalid character");
     }
 
     if (isLetter(c) || c == '_') {
-        if (c == 'f' && nextChar() == '"') {
-            consumeChar(); consumeChar(); return scanString('"');
-        }
-        consumeChar(); 
-        return scanIdentifier();
+        if (c == 'f' && nextChar() == '"') { consumeChar(); consumeChar(); return scanString('"'); }
+        consumeChar(); return scanIdentifier();
     }
 
     if (isDigit(c)) { consumeChar(); return scanNumber(); }
@@ -178,8 +175,8 @@ Token getNextToken() {
         case '>': if (matchNext('=')) return createToken(TOKEN_GREATER_EQUAL_OP); return createToken(TOKEN_GREATER_OP);
         case '!': if (matchNext('=')) return createToken(TOKEN_NOT_EQUAL_TO_OP); return createToken(TOKEN_LOGICAL_NOT_OP);
         case '&': if (matchNext('&')) return createToken(TOKEN_LOGICAL_AND_OP); return createToken(TOKEN_ADDRESS_OF_OP);
-        case '|': if (matchNext('|')) return createToken(TOKEN_LOGICAL_OR_OP); return createErrorToken("Invalid token");
-        case '^': if (matchNext('=')) return createErrorToken("Invalid token"); return createToken(TOKEN_EXPO_OP);
+        case '|': if (matchNext('|')) return createToken(TOKEN_LOGICAL_OR_OP); return createToken(TOKEN_ERROR);
+        case '^': if (matchNext('=')) return createToken(TOKEN_ERROR); return createToken(TOKEN_EXPO_OP);
         case ',': return createToken(TOKEN_COMMA);
         case ';': return createToken(TOKEN_SEMICOLON);
         case ':': return createToken(TOKEN_COLON);
@@ -191,14 +188,14 @@ Token getNextToken() {
         case ']': return createToken(TOKEN_R_BRACKET);
         case '"': return scanString('"');
         case '\'': return scanString('\'');
-        default: return createErrorToken("Invalid token");
+        default: return createToken(TOKEN_ERROR);
     }
 }
 
 void initScanner(const char *source) { scanner.source_start = source; scanner.token_start = source; scanner.scan_ptr = source; scanner.line_number = 1; }
 
 /* ========================================================================= */
-/* 2. SYMBOL TABLE & HELPERS                                                 */
+/* 2. SYMBOL TABLE & EVALUATOR                                               */
 /* ========================================================================= */
 
 #define MAX_SYMBOLS 100
@@ -208,23 +205,29 @@ typedef struct {
     char name[64];
     char value[MAX_VAL_LEN];
     int isArray;
+    int intVal;
 } Symbol;
 
 Symbol symbolTable[MAX_SYMBOLS];
 int symbolCount = 0;
 
 void setSymbol(const char* name, const char* val, int isArray) {
+    int iVal = atoi(val);
     for (int i = 0; i < symbolCount; i++) {
         if (strcmp(symbolTable[i].name, name) == 0) {
             strncpy(symbolTable[i].value, val, MAX_VAL_LEN - 1);
+            symbolTable[i].value[MAX_VAL_LEN - 1] = '\0';
             symbolTable[i].isArray = isArray;
+            symbolTable[i].intVal = iVal;
             return;
         }
     }
     if (symbolCount < MAX_SYMBOLS) {
         strncpy(symbolTable[symbolCount].name, name, 63);
         strncpy(symbolTable[symbolCount].value, val, MAX_VAL_LEN - 1);
+        symbolTable[symbolCount].value[MAX_VAL_LEN - 1] = '\0';
         symbolTable[symbolCount].isArray = isArray;
+        symbolTable[symbolCount].intVal = iVal;
         symbolCount++;
     }
 }
@@ -264,7 +267,6 @@ Token lookaheadToken;
 int panicMode = 0; 
 int success = 1;
 
-/* Principles */
 int hasString = 0;   
 int hasCAB = 0;      
 int hasAutoRef = 0;  
@@ -273,6 +275,20 @@ int hasQPA = 0;
 void advance() {
     currentToken = lookaheadToken;
     lookaheadToken = getNextToken();
+    
+    // Treat invalid characters as Syntax Errors
+    if (currentToken.type == TOKEN_ERROR) {
+        if (currentToken.lexeme_length > 1 && isalpha(currentToken.lexeme_start[0])) {
+             printf("[Syntax Error] Line %d: %.*s\n", currentToken.line, currentToken.lexeme_length, currentToken.lexeme_start);
+        } else {
+             printf("[Syntax Error] Line %d: Unexpected character '%.*s'\n", currentToken.line, currentToken.lexeme_length, currentToken.lexeme_start);
+        }
+        success = 0; 
+        panicMode = 1; 
+        currentToken = lookaheadToken;
+        lookaheadToken = getNextToken();
+    }
+
     while (currentToken.type == TOKEN_SINGLE_COMMENT || currentToken.type == TOKEN_MULTI_COMMENT) {
         currentToken = lookaheadToken;
         lookaheadToken = getNextToken();
@@ -280,20 +296,16 @@ void advance() {
 }
 
 void synchronize() {
-    panicMode = 0;
     while (currentToken.type != TOKEN_EOF) {
-        if (currentToken.type == TOKEN_SEMICOLON || currentToken.type == TOKEN_R_BRACE) {
+        if (currentToken.type == TOKEN_SEMICOLON) {
             advance();
+            panicMode = 0;
             return;
         }
-        switch (currentToken.type) {
-            case TOKEN_TYPE_INT: case TOKEN_TYPE_FLOAT: case TOKEN_TYPE_CHAR: 
-            case TOKEN_TYPE_BOOL: case TOKEN_TYPE_STRING:
-            case TOKEN_KW_IF: case TOKEN_KW_WHILE: case TOKEN_KW_FOR: 
-            case TOKEN_KW_DO: case TOKEN_KW_FN: case TOKEN_RW_EXIT:
-            case TOKEN_KW_DISPLAY: case TOKEN_KW_ASSIGN: case TOKEN_KW_STRUCT:
-                return;
-            default: ; 
+        if (currentToken.type == TOKEN_R_BRACE) {
+            advance();
+            panicMode = 0;
+            return;
         }
         advance();
     }
@@ -331,7 +343,6 @@ void checkConfusion(Token t) {
     }
 }
 
-/* DECLARATIONS */
 void statementList();
 void statement();
 void declaration();
@@ -345,10 +356,10 @@ void doWhileLoop();
 void forLoop();
 void functionDeclaration();        
 void quantumPointerOperation();    
-void expression();
-void simpleExpression();
-void term();
-void factor();
+int expression();
+int simpleExpression();
+int term();
+int factor();
 
 /* Helper: Interpolate {var} -> Value */
 void parseInterpolation(const char* start, int len) {
@@ -369,7 +380,6 @@ void parseInterpolation(const char* start, int len) {
 
             Symbol* sym = getSymbol(varName);
             if (sym) {
-                // Strip quotes if present
                 char *val = sym->value;
                 if (val[0] == '"' || val[0] == '\'') {
                     for(int k=1; k<(int)strlen(val)-1; k++) buffer[bufIdx++] = val[k];
@@ -511,23 +521,20 @@ void declaration() {
         if (currentToken.type == TOKEN_ASSIGN_OP) {
             advance();
             
-            // --- VALUE CAPTURE ---
             if (currentToken.type == TOKEN_RW_AUTO_REF) {
                 hasAutoRef = 1;
                 advance(); consume(TOKEN_L_PAREN, "Expected '('");
                 if (isType(currentToken) || currentToken.type == TOKEN_IDENTIFIER) advance(); 
                 consume(TOKEN_COMMA, "Expected ','");
                 
-                if (currentToken.type == TOKEN_NUMBER_INT || currentToken.type == TOKEN_NUMBER_FLOAT) {
-                    char valBuf[256];
-                    int vLen = currentToken.lexeme_length; if(vLen>255) vLen=255;
-                    strncpy(valBuf, currentToken.lexeme_start, vLen);
-                    valBuf[vLen] = '\0';
+                if (currentToken.type == TOKEN_NUMBER_INT) {
+                    char valBuf[64];
+                    strncpy(valBuf, currentToken.lexeme_start, currentToken.lexeme_length);
+                    valBuf[currentToken.lexeme_length] = '\0';
                     setSymbol(varName, valBuf, 0);
                     advance();
                 } else if (currentToken.type == TOKEN_L_BRACKET) { // Array
                     setSymbol(varName, "[1, 2, 3, 4, 5]", 1); 
-                    // Advance past array
                     int bracketCount = 1;
                     advance();
                     while(bracketCount > 0 && currentToken.type != TOKEN_EOF) {
@@ -540,21 +547,30 @@ void declaration() {
                 }
                 consume(TOKEN_R_PAREN, "Expected ')'");
             }
-            else if (currentToken.type == TOKEN_NUMBER_INT || 
-                currentToken.type == TOKEN_NUMBER_FLOAT || 
-                currentToken.type == TOKEN_STRING ||
-                currentToken.type == TOKEN_KW_TRUE || 
-                currentToken.type == TOKEN_KW_FALSE) {
-                
-                char valBuf[256];
-                int vLen = currentToken.lexeme_length;
-                if(vLen > 255) vLen = 255;
-                strncpy(valBuf, currentToken.lexeme_start, vLen);
-                valBuf[vLen] = '\0';
-                setSymbol(varName, valBuf, 0);
-                expression(); 
-            } else {
-                expression();
+            else {
+                // Check if simple literal to preserve exact format (e.g. 10.5)
+                int isLiteral = 0;
+                if (currentToken.type == TOKEN_NUMBER_INT || currentToken.type == TOKEN_NUMBER_FLOAT || 
+                    currentToken.type == TOKEN_STRING || currentToken.type == TOKEN_KW_TRUE || 
+                    currentToken.type == TOKEN_KW_FALSE) {
+                    
+                    char valBuf[256];
+                    int vLen = currentToken.lexeme_length; if(vLen>255)vLen=255;
+                    strncpy(valBuf, currentToken.lexeme_start, vLen);
+                    valBuf[vLen] = '\0';
+                    setSymbol(varName, valBuf, 0);
+                    isLiteral = 1;
+                }
+
+                // Call expression to parse tokens
+                int result = expression();
+
+                // If not literal (e.g. calculated), update with result
+                if (!isLiteral) {
+                    char valBuf[32];
+                    sprintf(valBuf, "%d", result);
+                    setSymbol(varName, valBuf, 0);
+                }
             }
         }
         if (currentToken.type == TOKEN_COMMA) advance(); else break;
@@ -650,15 +666,11 @@ void conditionalAssignmentBlock() {
         consume(TOKEN_RW_WHEN, "Expected 'when'");
         expression(); 
         consume(TOKEN_COLON, "Expected ':'");
-        
         if (currentToken.type == TOKEN_L_PAREN) { 
             advance(); 
             while (1) {
-                if (currentToken.type == TOKEN_KW_ASSIGN) {
-                    conditionalAssignmentBlock(); 
-                } else {
-                    expression();
-                }
+                if (currentToken.type == TOKEN_KW_ASSIGN) conditionalAssignmentBlock(); 
+                else expression();
                 if (currentToken.type == TOKEN_COMMA) advance(); else break;
             }
             consume(TOKEN_R_PAREN, "Expected ')'");
@@ -699,34 +711,30 @@ void assignmentOrInput() {
             if (currentToken.type == TOKEN_IDENTIFIER) advance(); 
             consume(TOKEN_R_PAREN, "Expected ')'");
             consume(TOKEN_SEMICOLON, "Expected ';'");
+        } else if (currentToken.type == TOKEN_L_PAREN) { 
+             error("Unknown function call");
+             advance();
         } else {
-            // Update Symbol Table
-            if (currentToken.type == TOKEN_NUMBER_INT || currentToken.type == TOKEN_NUMBER_FLOAT || currentToken.type == TOKEN_STRING) {
-                char valBuf[256];
-                int vLen = currentToken.lexeme_length;
-                if(vLen > 255) vLen = 255;
-                strncpy(valBuf, currentToken.lexeme_start, vLen);
-                valBuf[vLen] = '\0';
-                setSymbol(varName, valBuf, 0);
-            }
-            expression();
+            int result = expression();
+            char valBuf[32];
+            sprintf(valBuf, "%d", result);
+            setSymbol(varName, valBuf, 0);
             consume(TOKEN_SEMICOLON, "Expected ';'");
         }
     } else if (currentToken.type == TOKEN_INCREMENT_OP || currentToken.type == TOKEN_DECREMENT_OP) {
         advance();
         consume(TOKEN_SEMICOLON, "Expected ';'");
+    } else if (currentToken.type == TOKEN_L_PAREN) {
+        error("Unknown function call or missing assignment");
+        advance();
     } else {
         error("Expected assignment operator, '++', or '--'");
     }
 }
 
 void quantumPointerOperation() {
-    if (currentToken.type == TOKEN_QUANTUM_POINTER_OP) {
-        hasQPA = 1;
-        advance();
-    } else if (currentToken.type == TOKEN_MULT_OP) {
-        advance(); // Regular pointer deref
-    }
+    if (currentToken.type == TOKEN_QUANTUM_POINTER_OP) { hasQPA = 1; advance(); }
+    else if (currentToken.type == TOKEN_MULT_OP) { advance(); }
     
     consume(TOKEN_IDENTIFIER, "Expected pointer ID");
     
@@ -748,8 +756,6 @@ void displayStatement() {
             if (strncmp(currentToken.lexeme_start, "f\"", 2) == 0) startOffset = 2;
             
             if (strstr(currentToken.lexeme_start, "%d") || strstr(currentToken.lexeme_start, "%f")) {
-                // Handle format string, skip printing it directly to avoid mess
-                // Just let next args print
             } else {
                 parseInterpolation(currentToken.lexeme_start + startOffset, len - (startOffset + 1));
             }
@@ -761,16 +767,22 @@ void displayStatement() {
             
             if (lookaheadToken.type == TOKEN_L_BRACKET) {
                 Symbol* sym = getSymbol(varName);
-                if (sym && sym->isArray) {
-                    appendMockOutput("1 2 3 4 5"); // Spoof array output
-                } else {
-                    appendMockOutput("<array val>");
-                }
+                if (sym && sym->isArray) appendMockOutput("1 2 3 4 5");
+                else appendMockOutput("<array>");
                 advance(); advance(); expression(); consume(TOKEN_R_BRACKET, "Expected ']'");
             } else {
                 Symbol* sym = getSymbol(varName);
-                if (sym) appendMockOutput(sym->value);
-                else {
+                if (sym) {
+                    char *val = sym->value;
+                    if (val[0] == '"' || val[0] == '\'') {
+                        for(int k=1; k<(int)strlen(val)-1; k++) {
+                            char c[2] = {val[k], '\0'};
+                            appendMockOutput(c);
+                        }
+                    } else {
+                        appendMockOutput(val);
+                    }
+                } else {
                     char buf[128]; sprintf(buf, "<value of %s>", varName); appendMockOutput(buf);
                 }
                 advance();
@@ -788,8 +800,6 @@ void displayStatement() {
                 }
                 advance();
             }
-        } else {
-            expression();
         }
 
         if (currentToken.type == TOKEN_COMMA) advance();
@@ -811,24 +821,43 @@ void functionDeclaration() {
     consume(TOKEN_R_BRACE, "Expected '}'");
 }
 
-void expression() {
-    simpleExpression();
+int expression() {
+    int val = simpleExpression();
     if (currentToken.type >= TOKEN_EQUAL_TO_OP && currentToken.type <= TOKEN_LESS_EQUAL_OP) { 
         advance(); simpleExpression(); 
     }
     if (currentToken.type == TOKEN_LOGICAL_AND_OP || currentToken.type == TOKEN_LOGICAL_OR_OP) { 
         advance(); expression(); 
     }
+    return val;
 }
-void simpleExpression() {
-    term();
-    while (currentToken.type == TOKEN_ADD_OP || currentToken.type == TOKEN_SUB_OP) { advance(); term(); }
+
+int simpleExpression() {
+    int left = term();
+    while (currentToken.type == TOKEN_ADD_OP || currentToken.type == TOKEN_SUB_OP) { 
+        TokenType op = currentToken.type;
+        advance(); 
+        int right = term();
+        if (op == TOKEN_ADD_OP) left += right;
+        else left -= right;
+    }
+    return left;
 }
-void term() {
-    factor();
-    while (currentToken.type == TOKEN_MULT_OP || currentToken.type == TOKEN_DIV_OP || currentToken.type == TOKEN_MOD_OP) { advance(); factor(); }
+
+int term() {
+    int left = factor();
+    while (currentToken.type == TOKEN_MULT_OP || currentToken.type == TOKEN_DIV_OP || currentToken.type == TOKEN_MOD_OP) { 
+        TokenType op = currentToken.type;
+        advance(); 
+        int right = factor();
+        if (op == TOKEN_MULT_OP) left *= right;
+        else if (op == TOKEN_DIV_OP && right != 0) left /= right;
+    }
+    return left;
 }
-void factor() {
+
+int factor() {
+    int val = 0;
     if (currentToken.type == TOKEN_RW_AUTO_REF) { 
         hasAutoRef = 1; 
         advance(); consume(TOKEN_L_PAREN, "Expected '('");
@@ -840,29 +869,54 @@ void factor() {
             while (currentToken.type != closer && currentToken.type != TOKEN_EOF) { advance(); }
             advance(); 
         } else {
-            expression(); 
+            val = expression(); 
         }
-        consume(TOKEN_R_PAREN, "Expected ')'"); return;
+        consume(TOKEN_R_PAREN, "Expected ')'"); 
+        return val;
     }
     
     if (currentToken.type == TOKEN_MULT_OP || currentToken.type == TOKEN_POINTER_OP || currentToken.type == TOKEN_ADDRESS_OF_OP) {
-        advance(); factor(); return;
+        advance(); factor(); return 0;
     }
 
-    if (currentToken.type == TOKEN_IDENTIFIER || currentToken.type == TOKEN_NUMBER_INT || currentToken.type == TOKEN_NUMBER_FLOAT || currentToken.type == TOKEN_STRING || currentToken.type == TOKEN_KW_TRUE || currentToken.type == TOKEN_KW_FALSE) {
-        if (currentToken.type == TOKEN_IDENTIFIER) {
-            advance();
-            if (currentToken.type == TOKEN_L_BRACKET) {
-                advance(); expression(); consume(TOKEN_R_BRACKET, "Expected ']'");
-            } else if (currentToken.type == TOKEN_ARROW_OP) {
-                advance(); consume(TOKEN_IDENTIFIER, "Expected Field Name");
-            }
-        } else {
-            advance();
+    // UPDATED: Accept INT, FLOAT, STRING, TRUE/FALSE
+    if (currentToken.type == TOKEN_NUMBER_INT) {
+        val = atoi(currentToken.lexeme_start);
+        advance();
+    } 
+    else if (currentToken.type == TOKEN_NUMBER_FLOAT) {
+        val = (int)atof(currentToken.lexeme_start); // Cast to int for simple calc
+        advance();
+    }
+    else if (currentToken.type == TOKEN_KW_TRUE) {
+        val = 1;
+        advance();
+    }
+    else if (currentToken.type == TOKEN_KW_FALSE) {
+        val = 0;
+        advance();
+    }
+    else if (currentToken.type == TOKEN_IDENTIFIER) {
+        char name[64];
+        strncpy(name, currentToken.lexeme_start, currentToken.lexeme_length);
+        name[currentToken.lexeme_length] = '\0';
+        Symbol *s = getSymbol(name);
+        if (s) val = s->intVal;
+        
+        advance();
+        if (currentToken.type == TOKEN_L_BRACKET) { 
+            advance(); expression(); consume(TOKEN_R_BRACKET, "Expected ']'");
+        } else if (currentToken.type == TOKEN_ARROW_OP) {
+            advance(); consume(TOKEN_IDENTIFIER, "field");
         }
-    } else if (currentToken.type == TOKEN_L_PAREN) {
-        advance(); expression(); consume(TOKEN_R_PAREN, "Expected ')'");
-    } else if (currentToken.type == TOKEN_L_BRACE) {
+    } 
+    else if (currentToken.type == TOKEN_STRING) {
+        advance();
+    }
+    else if (currentToken.type == TOKEN_L_PAREN) {
+        advance(); val = expression(); consume(TOKEN_R_PAREN, "Expected ')'");
+    } 
+    else if (currentToken.type == TOKEN_L_BRACE) {
         advance();
         while (currentToken.type != TOKEN_R_BRACE && currentToken.type != TOKEN_EOF) {
             expression(); if (currentToken.type == TOKEN_COMMA) advance();
@@ -872,6 +926,7 @@ void factor() {
         error("Invalid expression factor");
         advance(); 
     }
+    return val;
 }
 
 int main() {

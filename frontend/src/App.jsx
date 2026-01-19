@@ -4,7 +4,9 @@ import { useState, useRef, useCallback, useEffect } from "react"
 
 const API_URL = "http://localhost:3001"
 
-// -------------------- Utilities --------------------
+// ===========================
+// 1. UTILITIES & API
+// ===========================
 const runLexicalAnalysis = async (code) => {
   const response = await fetch(`${API_URL}/lexical`, {
     method: "POST",
@@ -33,88 +35,57 @@ const runSyntaxAnalysis = async (code) => {
   return response.json()
 }
 
-// -------------------- Home Page Component --------------------
-const HomePage = ({ setView, darkMode }) => {
-  const btnBase = {
-    padding: "16px 32px",
-    fontSize: "14px",
-    fontWeight: "700",
-    borderRadius: "8px",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    textTransform: "uppercase",
-    width: "220px",
-    border: "none",
-    boxShadow: "0 4px 15px rgba(0,0,0,0.3)"
-  };
+// ===========================
+// 2. COMPONENTS
+// ===========================
 
+// --- HOME PAGE (Landing View) ---
+const HomePage = ({ onStart }) => {
   return (
     <div style={{ 
-      height: "100vh", 
-      width: "100vw", 
-      position: "relative", 
-      overflow: "hidden",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      background: darkMode ? "#1f2730" : "#6f38e5" 
+      height: "100vh", width: "100vw", display: "flex", flexDirection: "column", 
+      justifyContent: "center", alignItems: "center", position: "relative",
+      background: "#020617", overflow: "hidden"
     }}>
-      <img
-        src="/HomeBg.gif"
-        alt="Background"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          zIndex: 0,
-          filter: "brightness(0.8)",
-          pointerEvents: "none"
-        }}
-      />
+      {/* Background Image Layer */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+        backgroundImage: "url('/HomeBg.gif')", 
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        opacity: 0.5,
+        zIndex: 0
+      }}></div>
 
-      <div style={{ 
-        zIndex: 10, 
-        textAlign: "center", 
-        color: "#ffffff", 
-        position: "relative",
-        transform: "translateY(-40px)" 
-      }}>
-        <img src="Cnack_nobg.png" alt="Logo" style={{ height: "120px", marginBottom: "20px" }} />
-        <h1 style={{ fontSize: "48px", margin: "0 0 10px 0", textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
+      <div style={{ zIndex: 10, textAlign: "center", color: "white", transform: "translateY(-20px)" }}>
+        <img src="Cnack_nobg.png" alt="Cnack Logo" style={{ height: "110px", marginBottom: "24px", filter: "drop-shadow(0 0 10px rgba(255,255,255,0.2))" }} />
+        <h1 style={{ fontSize: "64px", fontWeight: "800", margin: "0 0 12px 0", letterSpacing: "-1px" }}>
           Cnack Mini Compiler
         </h1>
-        <p style={{ fontSize: "18px", opacity: 0.9, marginBottom: "40px", fontWeight: "500" }}>
+        <p style={{ fontSize: "18px", color: "#e2e8f0", marginBottom: "48px", fontWeight: "400" }}>
           An environment for lexical and syntax analysis of Cnack language.
         </p>
         
-        <div style={{ display: "flex", gap: "20px", justifyContent: "center" }}>
-          <button 
-            onClick={() => setView("lexical")}
-            style={{ ...btnBase, background: "#ffffff", color: "#0f4687" }}
-            onMouseEnter={(e) => e.target.style.transform = "translateY(-3px)"}
-            onMouseLeave={(e) => e.target.style.transform = "translateY(0)"}
-          >
-            Lexical Analyzer
-          </button>
-          
-          <button 
-            onClick={() => setView("syntax")}
-            style={{ ...btnBase, background: "#ffffff", color: "#b63388" }} 
-            onMouseEnter={(e) => e.target.style.transform = "translateY(-3px)"}
-            onMouseLeave={(e) => e.target.style.transform = "translateY(0)"}
-          >
-            Syntax Analyzer
-          </button>
-        </div>
+        <button 
+          onClick={onStart}
+          style={{
+            padding: "18px 50px", fontSize: "15px", fontWeight: "800", borderRadius: "6px",
+            border: "none", background: "white", color: "#0f172a", cursor: "pointer",
+            textTransform: "uppercase", letterSpacing: "1px",
+            boxShadow: "0 10px 25px -5px rgba(255, 255, 255, 0.2)",
+            transition: "all 0.2s ease"
+          }}
+          onMouseEnter={(e) => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = "0 15px 30px -5px rgba(255, 255, 255, 0.4)"; }}
+          onMouseLeave={(e) => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "0 10px 25px -5px rgba(255, 255, 255, 0.2)"; }}
+        >
+          START ANALYZING
+        </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
-// -------------------- Code Editor Component --------------------
+// --- CODE EDITOR COMPONENT ---
 const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
   const editorRef = useRef(null);
   const lineNumbersRef = useRef(null);
@@ -146,25 +117,6 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
         editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 4;
       }, 0);
     }
-
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const lines = value.substring(0, start).split("\n");
-      const currentLine = lines[lines.length - 1];
-      const match = currentLine.match(/^(\s*)/);
-      let indent = match ? match[0] : "";
-      
-      const trimmedLine = currentLine.trim();
-      if (trimmedLine.endsWith("{") || trimmedLine.endsWith("(") || trimmedLine.endsWith("[")) {
-        indent += "    ";
-      }
-
-      const newValue = value.substring(0, start) + "\n" + indent + value.substring(end);
-      onChange(newValue);
-      setTimeout(() => {
-        editorRef.current.selectionStart = editorRef.current.selectionEnd = start + 1 + indent.length;
-      }, 0);
-    }
   };
 
   const renderHighlightedCode = () => {
@@ -175,7 +127,7 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
       
       let color = darkMode ? "#e2e8f0" : "#0f4687"; 
 
-      if (word.startsWith('"') && word.endsWith('"')) {
+      if (word.startsWith('"')) {
         return <span key={i} style={{ color: "#80a6c0ff" }}>{word}</span>;
       }
       if (word.startsWith("//") || word.startsWith("/*")) {
@@ -185,7 +137,7 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
         color = "#437ae6ff"; 
       } 
       else if (/^(auto_ref)$/.test(word)) {
-        color = "#e6c643"; // Highlight auto_ref specially
+        color = "#e6c643";
       }
       else if (!isNaN(word) && word.trim() !== "") {
         color = "#bd93f9"; 
@@ -270,11 +222,10 @@ const CodeEditor = ({ value, onChange, disabled, darkMode }) => {
   );
 };
 
-// -------------------- Output Component --------------------
-const Output = ({ output, error, loading, darkMode, view }) => {
+// --- OUTPUT COMPONENT ---
+const Output = ({ output, error, loading, darkMode, activeTab }) => {
   const [filterLine, setFilterLine] = useState("");
 
-  // Helper: Parses the "Lexical" output into a list of tokens for the table
   const parseTokenOutput = (out) => {
     if (!out) return [];
     const lines = out.split("\n");
@@ -296,53 +247,54 @@ const Output = ({ output, error, loading, darkMode, view }) => {
     return tokens
   }
 
-  // Logic: Prepare data based on the View
+  // --- Logic to Render Content based on activeTab ---
   let contentToRender = null;
 
-  if (view === "lexical") {
-    // --- LEXICAL VIEW (Table) ---
+  if (activeTab === "lexical") {
+    // TABLE VIEW
     const tokens = output ? parseTokenOutput(output) : [];
     const filteredTokens = filterLine.trim() !== "" 
         ? tokens.filter(t => t.line === filterLine.trim()) 
         : tokens;
 
     if (filteredTokens.length > 0) {
-      contentToRender = (
-        <div style={{ background: darkMode ? "#28313b" : "#f8fafc", borderRadius: "8px", overflow: "hidden", border: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}` }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "16px 20px", background: "#4a89c6", fontWeight: "600", fontSize: "12px", color: "#ffffff", textAlign: "center" }}>
-            <div>LINE</div><div>TOKEN TYPE</div><div>LEXEME</div>
-          </div>
-          {filteredTokens.map((t, i) => (
-            <div key={i} style={{ 
-              display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "12px 20px", 
-              background: i % 2 === 0 ? (darkMode ? "#1f2730" : "#ffffff") : (darkMode ? "#28313b" : "#f8fafc"), 
-              borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`, 
-              fontSize: "13px", textAlign: "center", color: darkMode ? "#cbd5e1" : "#0f4687" 
-            }}>
-              <div>{t.line}</div><div>{t.type}</div><div>{t.lexeme}</div>
+        contentToRender = (
+            <div style={{ background: darkMode ? "#28313b" : "#f8fafc", borderRadius: "8px", overflow: "hidden", border: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}` }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "16px 20px", background: "#4a89c6", fontWeight: "600", fontSize: "12px", color: "#ffffff", textAlign: "center" }}>
+                <div>LINE</div><div>TOKEN TYPE</div><div>LEXEME</div>
+                </div>
+                {filteredTokens.map((t, i) => (
+                <div key={i} style={{ 
+                    display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: "12px 20px", 
+                    background: i % 2 === 0 ? (darkMode ? "#1f2730" : "#ffffff") : (darkMode ? "#28313b" : "#f8fafc"), 
+                    borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`, 
+                    fontSize: "13px", textAlign: "center", color: darkMode ? "#cbd5e1" : "#0f4687" 
+                }}>
+                    <div>{t.line}</div><div>{t.type}</div><div>{t.lexeme}</div>
+                </div>
+                ))}
             </div>
-          ))}
-        </div>
-      );
+        );
     }
   } else {
-    // --- SYNTAX VIEW (Simple Text) ---
+    // SYNTAX TERMINAL VIEW (White Background)
     if (output) {
-      contentToRender = (
-        <div style={{ 
-          background: darkMode ? "#0d1117" : "#1e1e1e", // Terminal-like background
-          color: "#d4d4d4",
-          padding: "20px", 
-          borderRadius: "8px", 
-          fontFamily: '"Fira Code", monospace',
-          fontSize: "13px",
-          lineHeight: "1.6",
-          whiteSpace: "pre-wrap",
-          border: `1px solid ${darkMode ? "#334155" : "#444"}`
-        }}>
-          {output}
-        </div>
-      );
+        contentToRender = (
+            <div style={{ 
+                background: "#ffffff", // Explicitly White
+                color: "#1e293b",      // Dark Text
+                padding: "20px", 
+                borderRadius: "8px", 
+                fontFamily: '"Fira Code", monospace',
+                fontSize: "13px",
+                lineHeight: "1.6",
+                whiteSpace: "pre-wrap",
+                border: "1px solid #e2e8f0",
+                minHeight: "100%"
+            }}>
+                {output}
+            </div>
+        );
     }
   }
 
@@ -352,14 +304,14 @@ const Output = ({ output, error, loading, darkMode, view }) => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${view}_analysis_output.txt`
+    link.download = `${activeTab}_analysis_output.txt`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }
 
-  const headerColor = view === "lexical" ? "#0f4687" : "#b63388"; 
+  const headerColor = activeTab === "lexical" ? "#0f4687" : "#0f4687"; 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: darkMode ? "#1f2730" : "#ffffff" }}>
@@ -371,10 +323,9 @@ const Output = ({ output, error, loading, darkMode, view }) => {
         display: "flex", justifyContent: "space-between", alignItems: "center",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <span>{view === "lexical" ? "Lexical Analysis" : "Syntax Analysis"}</span>
+          <span>{activeTab === "lexical" ? "Lexical Analysis" : "Syntax Analysis"}</span>
           
-          {/* Only show line filter for Lexical */}
-          {view === "lexical" && (
+          {activeTab === "lexical" && (
             <div style={{ 
               display: "flex", alignItems: "center", background: "rgba(255,255,255,0.1)", 
               borderRadius: "4px", padding: "2px 10px", border: "1px solid rgba(255,255,255,0.2)",
@@ -400,7 +351,6 @@ const Output = ({ output, error, loading, darkMode, view }) => {
         )}
       </div>
 
-      {/* Main Content Area */}
       <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
         {error ? (
           <div style={{ background: "rgba(248, 81, 73, 0.1)", border: "1px solid rgba(248, 81, 73, 0.3)", padding: "16px", borderRadius: "8px", color: "#d32f2f", fontSize: "13px", marginBottom: "20px", whiteSpace: "pre-wrap" }}>
@@ -413,7 +363,7 @@ const Output = ({ output, error, loading, darkMode, view }) => {
         ) : (
           contentToRender || (
             <div style={{ textAlign: "center", padding: "40px", color: darkMode ? "#64748b" : "#94a3b8", fontSize: "13px" }}>
-              {view === "lexical" && filterLine ? `No data found for line ${filterLine}.` : "No analysis results generated yet."}
+              {activeTab === "lexical" && filterLine ? `No data found for line ${filterLine}.` : "No analysis results generated yet."}
             </div>
           )
         )}
@@ -422,9 +372,9 @@ const Output = ({ output, error, loading, darkMode, view }) => {
   )
 }
 
-// -------------------- Editor Container --------------------
-const Editor = ({ code, setCode, onRun, onClear, loading, darkMode, view }) => {
-  const btnColor = view === "lexical" ? "#0f4687" : "#b63388";
+// --- EDITOR CONTAINER COMPONENT ---
+const Editor = ({ code, setCode, onRun, onClear, loading, darkMode, activeTab }) => {
+  const btnColor = activeTab === "lexical" ? "#0f4687" : "#0f4687";
   
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -460,16 +410,18 @@ const Editor = ({ code, setCode, onRun, onClear, loading, darkMode, view }) => {
             cursor: loading ? "not-allowed" : "pointer",
           }}
         >
-          {loading ? "Analyzing..." : `Run ${view === "lexical" ? "Lexical" : "Syntax"} Analysis`}
+          {loading ? "Analyzing..." : `Run ${activeTab === "lexical" ? "Lexical" : "Syntax"} Analysis`}
         </button>
       </div>
     </div>
   )
 }
 
-// -------------------- Main App --------------------
-const App = () => {
-  const [view, setView] = useState("home"); // "home", "lexical", "syntax"
+// ===========================
+// 3. MAIN COMPILER INTERFACE
+// ===========================
+const CompilerInterface = () => {
+  const [activeTab, setActiveTab] = useState("syntax"); // "lexical" | "syntax"
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("theme")
     return saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -496,11 +448,11 @@ const App = () => {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
-  // Reset output when switching views
+  // Reset output when switching tabs
   useEffect(() => {
     setOutput("");
     setError("");
-  }, [view]);
+  }, [activeTab]);
 
   const handleRun = async () => {
     if (!code.trim()) return setError("Please enter code to analyze.")
@@ -508,18 +460,18 @@ const App = () => {
     
     try {
       let result;
-      if (view === "lexical") {
+      if (activeTab === "lexical") {
         result = await runLexicalAnalysis(code)
-      } else if (view === "syntax") {
+      } else {
         result = await runSyntaxAnalysis(code)
       }
       
       if (result.success === false) {
-        // Syntax errors often come in result.output
+        // Return output even on failure (e.g. detailed syntax errors)
         if (result.output) {
-            // We set output anyway so the user sees the error table/text
             setOutput(result.output);
-            setError(result.output.split('\n')[0]); // Just grab first line for the error box
+            // Grab the first line as a summary error
+            setError(result.output.split('\n')[0]); 
         } else {
             setError("Analysis failed. Check your code.");
         }
@@ -534,35 +486,35 @@ const App = () => {
     }
   }
 
-  if (view === "home") {
-    return <HomePage setView={setView} darkMode={darkMode} />;
-  }
+  const primaryColor = activeTab === "lexical" ? "#0f4687" : "#0f4687";
 
-  const primaryColor = view === "lexical" ? "#0f4687" : "#b63388";
+  // Tab Button Style
+  const getTabStyle = (tabName) => ({
+    padding: "8px 16px",
+    background: activeTab === tabName ? "rgba(255,255,255,0.2)" : "transparent",
+    border: "none",
+    color: "#fff",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "12px",
+    fontWeight: "600",
+    transition: "0.2s"
+  });
 
   return (
     <div style={{
       display: "flex", flexDirection: "column", width: "100vw", height: "100vh",
       background: darkMode ? "#28313b" : "#d8e6f4ff", transition: "all 0.3s ease"
     }}>
-      {/* App Header */}
+      {/* App Header with Tabs */}
       <div style={{
         padding: "16px 24px", background: darkMode ? "#1f2730" : "#f8fafc",
         borderBottom: `1px solid ${darkMode ? "#334155" : "#e0e7ff"}`,
         display: "flex", justifyContent: "space-between", alignItems: "center"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}> 
-          <button 
-            onClick={() => setView("home")}
-            style={{ 
-              background: "none", border: "none", cursor: "pointer", fontSize: "16px",
-              color: darkMode ? "#fff" : primaryColor, padding: "4px", display: "flex", alignItems: "center"
-            }}
-          >
-            ←
-          </button>
           <img src="Cnack_nobg.png" alt="Logo" style={{ height: "40px" }} />
-          <h1 style={{ margin: 0, fontSize: "18px", color: darkMode ? "#f8fafc" : primaryColor }}>
+          <h1 style={{ margin: 0, fontSize: "18px", color: darkMode ? "#f8fafc" : "#0f4687" }}>
              Cnack Mini Compiler
           </h1>
           
@@ -581,21 +533,43 @@ const App = () => {
             </div>
           </div>
         </div>
-        <div style={{ fontSize: "12px", fontWeight: "600", color: darkMode ? "#94a3b8" : primaryColor, textTransform: "uppercase" }}>
-          {view === "lexical" ? "Lexical Analyzer Mode" : "Syntax Analyzer Mode"}
+
+        {/* Tab Switcher */}
+        <div style={{ display: "flex", gap: "8px", background: primaryColor, padding: "4px", borderRadius: "8px" }}>
+            <button onClick={() => setActiveTab("lexical")} style={getTabStyle("lexical")}>
+                LEXICAL
+            </button>
+            <button onClick={() => setActiveTab("syntax")} style={getTabStyle("syntax")}>
+                SYNTAX
+            </button>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", flex: 1, gap: "16px", padding: "16px", overflow: "hidden" }}>
         <div style={{ background: darkMode ? "#1f2730" : "#ffffff", borderRadius: "8px", border: `1px solid ${darkMode ? "#334155" : "#b9babdff"}`, overflow: "hidden" }}>
-          <Editor code={code} setCode={setCode} onRun={handleRun} onClear={() => setCode("")} loading={loading} darkMode={darkMode} view={view} />
+          <Editor code={code} setCode={setCode} onRun={handleRun} onClear={() => setCode("")} loading={loading} darkMode={darkMode} activeTab={activeTab} />
         </div>
         <div style={{ background: darkMode ? "#1f2730" : "#ffffff", borderRadius: "8px", border: `1px solid ${darkMode ? "#334155" : "#b9babdff"}`, overflow: "hidden" }}>
-          <Output output={output} error={error} loading={loading} darkMode={darkMode} view={view} />
+          <Output output={output} error={error} loading={loading} darkMode={darkMode} activeTab={activeTab} />
         </div>
       </div>
     </div>
   )
+}
+
+// ===========================
+// 4. MAIN APP WRAPPER
+// ===========================
+const App = () => {
+  const [hasStarted, setHasStarted] = useState(false);
+
+  // If the user hasn't clicked start, show HomePage
+  if (!hasStarted) {
+    return <HomePage onStart={() => setHasStarted(true)} />;
+  }
+
+  // Otherwise, show the main Compiler Interface
+  return <CompilerInterface />;
 }
 
 export default App
