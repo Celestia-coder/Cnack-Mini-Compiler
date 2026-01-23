@@ -277,19 +277,19 @@ const Output = ({ output, error, loading, darkMode, activeTab }) => {
         );
     }
   } else {
-    // SYNTAX TERMINAL VIEW (White Background)
+    // SYNTAX TERMINAL VIEW (Conditional Background)
     if (output) {
         contentToRender = (
             <div style={{ 
-                background: "#ffffff", // Explicitly White
-                color: "#1e293b",      // Dark Text
+                background: darkMode ? "#0f111a" : "#ffffff", // Dark (Terminal Black) vs White
+                color: darkMode ? "#e2e8f0" : "#1e293b",      // Light Text vs Dark Text
                 padding: "20px", 
                 borderRadius: "8px", 
                 fontFamily: '"Fira Code", monospace',
                 fontSize: "13px",
                 lineHeight: "1.6",
                 whiteSpace: "pre-wrap",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${darkMode ? "#334155" : "#e2e8f0"}`,
                 minHeight: "100%"
             }}>
                 {output}
