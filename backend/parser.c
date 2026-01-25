@@ -90,7 +90,6 @@ Token createErrorToken(const char *message) {
     tok.lexeme_length = (int)strlen(message); tok.line = scanner.line_number;
     return tok;
 }
-// FIX: Helper to report error on the START line of a string
 Token createErrorTokenOnLine(const char *message, int line) {
     Token tok; tok.type = TOKEN_ERROR; tok.lexeme_start = message;
     tok.lexeme_length = (int)strlen(message); tok.line = line;
@@ -132,11 +131,10 @@ Token scanNumber() {
 }
 
 Token scanString(char quote) {
-    int startLine = scanner.line_number; // Remember where the string started
+    int startLine = scanner.line_number;
     while (currentChar() != quote && !reachedEnd()) {
         if (currentChar() == '\n') {
             scanner.line_number++; 
-            // FIX: Return error using startLine
             return createErrorTokenOnLine("Unterminated string", startLine);
         }
         consumeChar();
@@ -172,7 +170,6 @@ Token getNextToken() {
         case '%': if (matchNext('=')) return createToken(TOKEN_MOD_ASSIGN_OP); return createToken(TOKEN_MOD_OP);
         case '=': 
             if (matchNext('=')) {
-                // FIX: Check for ===
                 if (currentChar() == '=') { consumeChar(); return createErrorToken("Invalid operator '==='"); }
                 return createToken(TOKEN_EQUAL_TO_OP); 
             }
@@ -501,21 +498,9 @@ void program() {
             advance(); consume(TOKEN_L_PAREN, "Expected '('"); consume(TOKEN_R_PAREN, "Expected ')'"); consume(TOKEN_SEMICOLON, "Expected ';'");
         }
         consume(TOKEN_R_BRACE, "Expected '}'");
-        if (success) {
-            printf("\n>>> SYNTAX ANALYSIS: PARSING SUCCESSFUL!\n");
-            printf("----------------------------------------\n");
-            printf("Principles Detected:\n");
-            if (hasString)  printf(" [x] Principle 1: String Data Type\n");
-            if (hasCAB)     printf(" [x] Principle 2: Conditional Assignment Blocks (CAB)\n");
-            if (hasAutoRef) printf(" [x] Principle 3: Auto Reference Command\n");
-            if (hasQPA)     printf(" [x] Principle 4: Quantum Pointer Aliasing (QPA)\n");
-            if (!hasString && !hasCAB && !hasAutoRef && !hasQPA) printf(" [ ] None detected.\n");
-            printf("----------------------------------------\n");
-            if (mockPos > 0) { printf("\n[PROGRAM OUTPUT]\n%s\n----------------------------------------\n", mockOutput); }
-        } else {
-            printf("\n>>> SYNTAX ANALYSIS: PARSING UNSUCCESSFUL!\n");
-        }
-        success = 1; panicMode = 0; hasString = 0; hasCAB = 0; hasAutoRef = 0; hasQPA = 0; mockPos = 0; mockOutput[0] = '\0';
+    } else {
+         error("Unexpected token");
+         advance();
     }
 }
 
@@ -670,6 +655,7 @@ void doWhileLoop() {
     
     // Execution loop
     while (cond) {
+        if (!success) break;
         scanner = bodyStart; currentToken = bodyTok; lookaheadToken = bodyLook;
         statementList(); // re-exec body
         consume(TOKEN_R_BRACE, "}"); 
@@ -691,21 +677,23 @@ void forLoop() {
     Scanner updStart = scanner; Token updTok = currentToken; Token updLook = lookaheadToken;
     // Skip update part parsing initially
     int pCount = 0;
-    while(currentToken.type != TOKEN_R_PAREN || pCount > 0) {
+    while((currentToken.type != TOKEN_R_PAREN || pCount > 0) && currentToken.type != TOKEN_EOF) {
+        if(currentToken.type == TOKEN_L_BRACE) { softError("Missing ')' in for loop"); break; }
         if(currentToken.type == TOKEN_L_PAREN) pCount++;
         else if(currentToken.type == TOKEN_R_PAREN) pCount--;
         advance();
     }
-    consume(TOKEN_R_PAREN, ")"); 
+    consume(TOKEN_R_PAREN, "Expected ')'"); 
     
     consume(TOKEN_L_BRACE, "{"); 
     Scanner bodyStart = scanner; Token bodyTok = currentToken; Token bodyLook = lookaheadToken;
-    // SKIP BODY INITIALLY (Fixes duplicate execution)
+    // SKIP BODY INITIALLY
     skipBlock(); 
     Scanner endScanner = scanner; Token endTok = currentToken; Token endLook = lookaheadToken;
 
     // Execution Loop
     while(cond) {
+        if (!success) break;
         scanner = bodyStart; currentToken = bodyTok; lookaheadToken = bodyLook;
         statementList(); // execute body
         consume(TOKEN_R_BRACE, "}");
@@ -755,6 +743,7 @@ void whileLoop() {
     Scanner endScanner = scanner; Token endTok = currentToken; Token endLook = lookaheadToken;
     
     while(cond) {
+        if (!success) break;
         scanner = bodyStart; currentToken = bodyTok; lookaheadToken = bodyLook;
         statementList(); 
         consume(TOKEN_R_BRACE, "}");
@@ -782,7 +771,10 @@ void ifStatement() {
 }
 
 void conditionalAssignmentBlock() { 
-    hasCAB=1; consume(TOKEN_KW_ASSIGN, "assign"); consume(TOKEN_L_PAREN, "(");
+    hasCAB=1; consume(TOKEN_KW_ASSIGN, "assign"); 
+    
+    consume(TOKEN_L_PAREN, "Expected '('"); 
+    
     char targets[5][64]; int targetCount = 0;
     do {
         if (targetCount < 5 && currentToken.type == TOKEN_IDENTIFIER) {
@@ -793,7 +785,11 @@ void conditionalAssignmentBlock() {
         }
         if (currentToken.type == TOKEN_COMMA) advance(); else break;
     } while(1);
-    consume(TOKEN_R_PAREN, ")"); consume(TOKEN_L_BRACE, "{"); 
+    
+    consume(TOKEN_R_PAREN, ")"); 
+    if (targetCount == 0) { softError("Assign block requires at least one variable"); }
+    
+    consume(TOKEN_L_BRACE, "Expected '{'"); 
     
     int matched = 0;
     while(currentToken.type == TOKEN_RW_WHEN) {
@@ -809,9 +805,7 @@ void conditionalAssignmentBlock() {
             if (currentToken.type == TOKEN_L_PAREN) {
                 advance();
                 for (int i = 0; i < targetCount; i++) {
-                    char valBuf[256];
-                    captureValue(valBuf);
-                    setSymbol(targets[i], valBuf);
+                    char valBuf[256]; captureValue(valBuf); setSymbol(targets[i], valBuf);
                     if (i < targetCount - 1) consume(TOKEN_COMMA, ",");
                 }
                 consume(TOKEN_R_PAREN, ")");
@@ -822,7 +816,6 @@ void conditionalAssignmentBlock() {
                  if (targetCount > 0) setSymbol(targets[0], valBuf);
             }
         } else {
-             // Skip logic
              if (currentToken.type == TOKEN_L_PAREN) {
                  advance(); while(currentToken.type != TOKEN_R_PAREN && currentToken.type != TOKEN_EOF) advance(); advance();
              } else if (currentToken.type == TOKEN_KW_ASSIGN) {
@@ -831,15 +824,13 @@ void conditionalAssignmentBlock() {
                  if (currentToken.type == TOKEN_STRING || currentToken.type == TOKEN_IDENTIFIER || currentToken.type == TOKEN_TYPE_CHAR || currentToken.type == TOKEN_NUMBER_INT) advance();
              }
         }
-        if (currentToken.type == TOKEN_SEMICOLON) { advance(); } 
-        else if (currentToken.type != TOKEN_R_BRACE && currentToken.type != TOKEN_RW_OTHERWISE) { softError("Missing semicolon"); }
+        consume(TOKEN_SEMICOLON, "Missing semicolon");
     } 
 
     if (currentToken.type == TOKEN_RW_OTHERWISE) {
         advance(); 
         if (currentToken.type == TOKEN_ERROR) advance(); 
-        if (currentToken.type == TOKEN_IDENTIFIER) { softError("Missing colon"); }
-        else if (currentToken.type != TOKEN_COLON) { /* Continue */ } else { consume(TOKEN_COLON, ":"); }
+        consume(TOKEN_COLON, "Missing colon");
         
         if (!matched) {
              if (currentToken.type == TOKEN_L_PAREN) {
@@ -856,7 +847,7 @@ void conditionalAssignmentBlock() {
         } else {
              while (currentToken.type != TOKEN_SEMICOLON && currentToken.type != TOKEN_R_BRACE && currentToken.type != TOKEN_EOF) advance();
         }
-        consume(TOKEN_SEMICOLON, ";");
+        consume(TOKEN_SEMICOLON, "Missing semicolon");
     } else if (currentToken.type == TOKEN_KW_ELSE) {
         softError("Used 'else' instead of 'otherwise'"); 
         advance(); consume(TOKEN_COLON, ":"); while(currentToken.type!=TOKEN_SEMICOLON) advance(); consume(TOKEN_SEMICOLON,";");
@@ -885,8 +876,10 @@ void assignmentOrInput() {
         else if (strcmp(varName, "character") == 0) softError("'character' must be 'char'");
         else if (strcmp(varName, "Int") == 0) softError("Keywords are lowercase");
         else if (strcmp(varName, "STRING") == 0) softError("'string' is lowercase in your keyword list");
-        else error("Expected assignment operator"); 
+        else error("Invalid statement syntax"); 
+        
         while(currentToken.type != TOKEN_SEMICOLON && currentToken.type != TOKEN_EOF) advance();
+        if(currentToken.type == TOKEN_SEMICOLON) advance();
     }
 }
 
@@ -900,9 +893,8 @@ void displayStatement() {
     while (1) {
         if (currentToken.type == TOKEN_RW_EXIT) return; 
         
-        // Handle f-strings: check for 'f' identifier followed by STRING token
         if (currentToken.type == TOKEN_IDENTIFIER && currentToken.lexeme_length == 1 && currentToken.lexeme_start[0] == 'f' && lookaheadToken.type == TOKEN_STRING) {
-            advance(); // consume f
+            advance(); 
         }
 
         if (currentToken.type == TOKEN_STRING) { parseInterpolation(currentToken.lexeme_start + 1, currentToken.lexeme_length - 2); advance(); }
@@ -1011,9 +1003,29 @@ int main() {
     input[total_size] = '\0';
     initScanner(input); lookaheadToken = getNextToken(); advance();
     
-    while(currentToken.type != TOKEN_EOF) {
-        program();
-        if (currentToken.type != TOKEN_RW_EXECUTE && currentToken.type != TOKEN_KW_STRUCT && currentToken.type != TOKEN_EOF) advance();
+    // Parse the single program structure
+    program();
+    
+    // Check for trailing junk
+    if (success && currentToken.type != TOKEN_EOF) {
+        printf("[Syntax Error] Line %d: Unexpected content after program end\n", currentToken.line);
+        success = 0;
     }
+
+    if (success) {
+        printf("\n>>> SYNTAX ANALYSIS: PARSING SUCCESSFUL!\n");
+        printf("----------------------------------------\n");
+        printf("Principles Detected:\n");
+        if (hasString)  printf(" [✔] Principle 1: String Data Type\n");
+        if (hasCAB)     printf(" [✔] Principle 2: Conditional Assignment Blocks (CAB)\n");
+        if (hasAutoRef) printf(" [✔] Principle 3: Auto Reference Command\n");
+        if (hasQPA)     printf(" [✔] Principle 4: Quantum Pointer Aliasing (QPA)\n");
+        if (!hasString && !hasCAB && !hasAutoRef && !hasQPA) printf(" [ ] None detected.\n");
+        printf("----------------------------------------\n");
+        if (mockPos > 0) { printf("\n[PROGRAM OUTPUT]\n%s\n----------------------------------------\n", mockOutput); }
+    } else {
+        printf("\n>>> SYNTAX ANALYSIS: PARSING UNSUCCESSFUL!\n");
+    }
+    
     free(input); return 0;
 }
