@@ -217,7 +217,7 @@ Symbol symbolTable[MAX_SYMBOLS];
 int symbolCount = 0;
 
 void setSymbol(const char* name, const char* val) {
-    if (strlen(name) >= MAX_VAR_LEN) return; // Prevent overflow crash
+    if (strlen(name) >= MAX_VAR_LEN) return; 
     for (int i = 0; i < symbolCount; i++) {
         if (strcmp(symbolTable[i].name, name) == 0) {
             strncpy(symbolTable[i].value, val, MAX_VAL_LEN - 1);
@@ -275,6 +275,7 @@ void appendNewline() {
 /* ========================================================================= */
 
 Token currentToken;
+Token previousToken; // NEW: Track previous token for line number accuracy
 Token lookaheadToken;
 int panicMode = 0; 
 int success = 1;
@@ -286,6 +287,7 @@ int isLiteral(Token t) {
 }
 
 void advance() {
+    previousToken = currentToken; // Update previous before moving
     currentToken = lookaheadToken;
     lookaheadToken = getNextToken();
     if (currentToken.type == TOKEN_ERROR) {
@@ -339,7 +341,22 @@ void synchronize() {
 }
 
 void consume(TokenType type, const char *msg) {
-    if (currentToken.type == type) { advance(); } else { error(msg); }
+    if (currentToken.type == type) {
+        advance();
+    } else {
+        // FIX: Report error on the *previous* token's line if we moved to a new line
+        // This puts the error at the end of the statement where the semi/brace should be.
+        int line = currentToken.line;
+        if (line > previousToken.line && previousToken.line != 0) {
+            line = previousToken.line;
+        }
+        
+        if (panicMode) return;
+        panicMode = 1;
+        success = 0; 
+        printf("[Syntax Error] Line %d: %s (Found '%.*s')\n", 
+               line, msg, currentToken.lexeme_length, currentToken.lexeme_start);
+    }
 }
 
 int isType(Token t) {
@@ -377,10 +394,6 @@ void captureValue(char* buffer) {
          strncpy(buffer, currentToken.lexeme_start, currentToken.lexeme_length);
          buffer[currentToken.lexeme_length] = '\0';
          advance();
-    } else if (currentToken.type == TOKEN_IDENTIFIER) {
-        strncpy(buffer, currentToken.lexeme_start, currentToken.lexeme_length);
-        buffer[currentToken.lexeme_length] = '\0';
-        advance(); 
     } else {
         float f = expression();
         if (floorf(f) == f) sprintf(buffer, "%.0f", f); else sprintf(buffer, "%.1f", f);
@@ -442,7 +455,7 @@ void parseInterpolation(const char* start, int len) {
             while(i+braceLen < len && start[i+braceLen] != '}') braceLen++;
             if (start[i] == '*') { varName[vIdx++] = '*'; i++; }
             while (i < len && (isalnum(start[i]) || start[i] == '_' || start[i] == '-' || start[i] == '>')) { 
-                if (vIdx < 63) varName[vIdx++] = start[i++]; else i++; // Bounds check
+                if (vIdx < 63) varName[vIdx++] = start[i++]; else i++; 
             }
             varName[vIdx] = '\0';
             char lookup[64]; strcpy(lookup, varName);
@@ -532,7 +545,14 @@ void statement() {
     else if (currentToken.type == TOKEN_IDENTIFIER) {
         checkConfusion(currentToken); if (panicMode) { return; }
         if (currentToken.type == TOKEN_KW_ELSE) { softError("Invalid syntax: 'else' without 'if'"); advance(); return; }
-        assignmentOrInput(); 
+        
+        // Check if it's an expression statement (e.g., i + 1;)
+        if (lookaheadToken.type >= TOKEN_ADD_OP && lookaheadToken.type <= TOKEN_EXPO_OP) {
+             expression();
+             consume(TOKEN_SEMICOLON, ";");
+        } else {
+             assignmentOrInput();
+        }
     }
     else if (currentToken.type == TOKEN_KW_DISPLAY) displayStatement();
     else if (currentToken.type == TOKEN_KW_ASSIGN) conditionalAssignmentBlock();
@@ -802,7 +822,7 @@ void conditionalAssignmentBlock() {
         
         if (cond && !matched) {
             matched = 1;
-            if (currentToken.type == TOKEN_L_PAREN) {
+            if (currentToken.type == TOKEN_L_PAREN && targetCount > 1) { 
                 advance();
                 for (int i = 0; i < targetCount; i++) {
                     char valBuf[256]; captureValue(valBuf); setSymbol(targets[i], valBuf);
@@ -816,12 +836,16 @@ void conditionalAssignmentBlock() {
                  if (targetCount > 0) setSymbol(targets[0], valBuf);
             }
         } else {
+             // Skip logic
              if (currentToken.type == TOKEN_L_PAREN) {
-                 advance(); while(currentToken.type != TOKEN_R_PAREN && currentToken.type != TOKEN_EOF) advance(); advance();
-             } else if (currentToken.type == TOKEN_KW_ASSIGN) {
-                 int d=0; do{ if(currentToken.type==TOKEN_L_BRACE)d++; else if(currentToken.type==TOKEN_R_BRACE)d--; advance(); }while(d>0);
+                 int bal = 0;
+                 do {
+                     if (currentToken.type == TOKEN_L_PAREN || currentToken.type == TOKEN_L_BRACE) bal++;
+                     else if (currentToken.type == TOKEN_R_PAREN || currentToken.type == TOKEN_R_BRACE) bal--;
+                     advance();
+                 } while (bal > 0 && currentToken.type != TOKEN_EOF);
              } else {
-                 if (currentToken.type == TOKEN_STRING || currentToken.type == TOKEN_IDENTIFIER || currentToken.type == TOKEN_TYPE_CHAR || currentToken.type == TOKEN_NUMBER_INT) advance();
+                 while (currentToken.type != TOKEN_SEMICOLON && currentToken.type != TOKEN_EOF) advance();
              }
         }
         consume(TOKEN_SEMICOLON, "Missing semicolon");
@@ -833,7 +857,7 @@ void conditionalAssignmentBlock() {
         consume(TOKEN_COLON, "Missing colon");
         
         if (!matched) {
-             if (currentToken.type == TOKEN_L_PAREN) {
+             if (currentToken.type == TOKEN_L_PAREN && targetCount > 1) { 
                 advance();
                 for (int i = 0; i < targetCount; i++) {
                     char valBuf[256]; captureValue(valBuf); setSymbol(targets[i], valBuf);
@@ -857,6 +881,14 @@ void conditionalAssignmentBlock() {
 
 void assignmentOrInput() {
     char varName[64]; strncpy(varName, currentToken.lexeme_start, currentToken.lexeme_length); varName[currentToken.lexeme_length] = '\0';
+    
+    Token nextTok = lookaheadToken;
+    if (nextTok.type >= TOKEN_ADD_OP && nextTok.type <= TOKEN_EXPO_OP) {
+        expression(); 
+        consume(TOKEN_SEMICOLON, ";");
+        return; 
+    }
+
     consume(TOKEN_IDENTIFIER, "ID");
     
     if (currentToken.type >= TOKEN_ASSIGN_OP && currentToken.type <= TOKEN_MOD_ASSIGN_OP) {
@@ -876,7 +908,7 @@ void assignmentOrInput() {
         else if (strcmp(varName, "character") == 0) softError("'character' must be 'char'");
         else if (strcmp(varName, "Int") == 0) softError("Keywords are lowercase");
         else if (strcmp(varName, "STRING") == 0) softError("'string' is lowercase in your keyword list");
-        else error("Invalid statement syntax"); 
+        else error("Expected assignment operator"); 
         
         while(currentToken.type != TOKEN_SEMICOLON && currentToken.type != TOKEN_EOF) advance();
         if(currentToken.type == TOKEN_SEMICOLON) advance();
@@ -1003,23 +1035,28 @@ int main() {
     input[total_size] = '\0';
     initScanner(input); lookaheadToken = getNextToken(); advance();
     
-    // Parse the single program structure
-    program();
-    
-    // Check for trailing junk
-    if (success && currentToken.type != TOKEN_EOF) {
-        printf("[Syntax Error] Line %d: Unexpected content after program end\n", currentToken.line);
+    // Check for junk BEFORE program
+    if (currentToken.type != TOKEN_RW_EXECUTE && currentToken.type != TOKEN_KW_STRUCT && currentToken.type != TOKEN_EOF) {
+        printf("[Syntax Error] Line %d: Unexpected content before program start\n", currentToken.line);
         success = 0;
+    } else {
+        // Parse the single program structure
+        program();
+        // Check for trailing junk
+        if (success && currentToken.type != TOKEN_EOF) {
+            printf("[Syntax Error] Line %d: Unexpected content after program end\n", currentToken.line);
+            success = 0;
+        }
     }
 
     if (success) {
         printf("\n>>> SYNTAX ANALYSIS: PARSING SUCCESSFUL!\n");
         printf("----------------------------------------\n");
         printf("Principles Detected:\n");
-        if (hasString)  printf(" [✔] Principle 1: String Data Type\n");
-        if (hasCAB)     printf(" [✔] Principle 2: Conditional Assignment Blocks (CAB)\n");
-        if (hasAutoRef) printf(" [✔] Principle 3: Auto Reference Command\n");
-        if (hasQPA)     printf(" [✔] Principle 4: Quantum Pointer Aliasing (QPA)\n");
+        if (hasString)  printf(" [x] Principle 1: String Data Type\n");
+        if (hasCAB)     printf(" [x] Principle 2: Conditional Assignment Blocks (CAB)\n");
+        if (hasAutoRef) printf(" [x] Principle 3: Auto Reference Command\n");
+        if (hasQPA)     printf(" [x] Principle 4: Quantum Pointer Aliasing (QPA)\n");
         if (!hasString && !hasCAB && !hasAutoRef && !hasQPA) printf(" [ ] None detected.\n");
         printf("----------------------------------------\n");
         if (mockPos > 0) { printf("\n[PROGRAM OUTPUT]\n%s\n----------------------------------------\n", mockOutput); }
